@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import Layout from "@/components/Layout";
-import Sparkline from "@/components/Sparkline";
+import Candles from "@/components/Candles";
 import { MARKET_UNITS, useMarket } from "@/lib/markets";
 import type { Market } from "@/lib/positions";
 import { closePosition, openPosition, pnl, usePositions } from "@/lib/positions";
@@ -23,7 +23,6 @@ function TradePage() {
   const { open } = usePositions();
 
   const sizeNum = Number(size) || 0;
-  const estPnl = dir === "LONG" ? sizeNum * (m.current - m.current) : 0;
 
   const onOpen = () => {
     if (!wallet || sizeNum <= 0) return;
@@ -32,91 +31,150 @@ function TradePage() {
 
   return (
     <Layout>
-      <div className="pt-20 pb-12 mx-auto max-w-7xl px-4 sm:px-6">
+      <div className="pt-28 pb-20 mx-auto max-w-7xl px-4 sm:px-8">
         {!wallet && (
-          <div className="mb-6 rounded-lg border border-white/10 bg-card p-4 flex items-center justify-between flex-wrap gap-3">
+          <div className="mb-8 glass rounded-2xl p-5 flex items-center justify-between flex-wrap gap-3">
             <p className="text-white/80 text-sm">Connect your wallet to open positions.</p>
-            <button onClick={() => connectWallet()} className="px-4 py-2 rounded-md bg-primary text-white text-sm hover:bg-primary/90">
+            <button
+              onClick={() => connectWallet()}
+              className="px-5 py-2.5 rounded-full bg-white text-[oklch(0.12_0.03_260)] text-sm font-medium hover:bg-white/90"
+            >
               Connect Wallet
             </button>
           </div>
         )}
 
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div className="grid gap-6 lg:grid-cols-3">
           {/* Chart panel */}
-          <div className="lg:col-span-2 rounded-xl bg-card border border-white/5 p-5">
-            <div className="flex flex-wrap items-center gap-2 mb-5">
-              {MARKETS.map((mm) => (
-                <button
-                  key={mm}
-                  onClick={() => setMarket(mm)}
-                  className={`px-3 py-1.5 rounded-md text-sm border ${
-                    market === mm ? "bg-primary/20 border-primary/50 text-white" : "border-white/10 text-white/70 hover:text-white"
+          <div className="lg:col-span-2 glass rounded-2xl p-6 sm:p-8 relative overflow-hidden">
+            {/* Watermark */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 flex items-center justify-center select-none"
+            >
+              <span
+                className="font-semibold tracking-[0.15em] text-white/[0.035]"
+                style={{ fontSize: "clamp(64px, 14vw, 200px)" }}
+              >
+                CHAINFLUX
+              </span>
+            </div>
+
+            <div className="relative">
+              <div className="flex flex-wrap items-center gap-2 mb-6">
+                {MARKETS.map((mm) => (
+                  <button
+                    key={mm}
+                    onClick={() => setMarket(mm)}
+                    className={`px-4 py-2 rounded-full text-xs tracking-[0.2em] uppercase border transition-colors ${
+                      market === mm
+                        ? "bg-white/10 border-white/30 text-white"
+                        : "border-white/10 text-white/60 hover:text-white hover:border-white/20"
+                    }`}
+                  >
+                    {mm}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-baseline gap-4 flex-wrap">
+                <div className="text-5xl sm:text-6xl text-white tabular-nums font-semibold tracking-tight">
+                  {m.current.toFixed(2)}
+                </div>
+                <div className="text-xs text-white/40 tracking-widest uppercase">
+                  {MARKET_UNITS[market]}
+                </div>
+                <div
+                  className={`text-sm tabular-nums px-3 py-1 rounded-full border ${
+                    m.change >= 0
+                      ? "text-emerald-300 border-emerald-500/30 bg-emerald-500/5"
+                      : "text-red-300 border-red-500/30 bg-red-500/5"
                   }`}
                 >
-                  {mm}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-baseline gap-4">
-              <div className="text-3xl sm:text-4xl text-white tabular-nums font-semibold">{m.current.toFixed(2)}</div>
-              <div className="text-sm text-white/50">{MARKET_UNITS[market]}</div>
-              <div className={`text-sm tabular-nums ${m.change >= 0 ? "text-emerald-400/90" : "text-red-400/90"}`}>
-                {m.change >= 0 ? "+" : ""}{m.change.toFixed(2)}% 24h
+                  {m.change >= 0 ? "+" : ""}
+                  {m.change.toFixed(2)}% 24h
+                </div>
               </div>
-            </div>
-            <div className="mt-4 text-primary/80">
-              <Sparkline data={m.history} height={220} stroke="oklch(0.75 0.10 245)" />
+              <div className="mt-8">
+                <Candles data={m.history} height={300} />
+              </div>
             </div>
           </div>
 
           {/* Position builder */}
-          <div className="rounded-xl bg-card border border-white/5 p-5">
-            <div className="grid grid-cols-2 gap-2">
+          <div className="glass rounded-2xl p-6 sm:p-7">
+            <div className="text-[10px] tracking-[0.3em] text-white/50 uppercase">Open Position</div>
+            <div className="mt-5 grid grid-cols-2 gap-3">
               <button
                 onClick={() => setDir("LONG")}
-                className={`py-2.5 rounded-md text-sm font-medium border ${dir === "LONG" ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300" : "border-white/10 text-white/70"}`}
+                className={`relative overflow-hidden py-5 rounded-xl text-base font-semibold tracking-wide transition-all border ${
+                  dir === "LONG"
+                    ? "bg-emerald-500/20 border-emerald-400/60 text-emerald-200 shadow-[inset_0_1px_0_oklch(1_0_0/0.15),0_10px_30px_-10px_oklch(0.75_0.18_155/0.4)]"
+                    : "border-white/10 text-white/60 hover:text-white hover:border-white/25"
+                }`}
               >
+                <span className="block text-[10px] tracking-[0.3em] opacity-70 mb-1">BUY</span>
                 LONG
               </button>
               <button
                 onClick={() => setDir("SHORT")}
-                className={`py-2.5 rounded-md text-sm font-medium border ${dir === "SHORT" ? "bg-red-500/15 border-red-500/40 text-red-300" : "border-white/10 text-white/70"}`}
+                className={`relative overflow-hidden py-5 rounded-xl text-base font-semibold tracking-wide transition-all border ${
+                  dir === "SHORT"
+                    ? "bg-red-500/20 border-red-400/60 text-red-200 shadow-[inset_0_1px_0_oklch(1_0_0/0.15),0_10px_30px_-10px_oklch(0.70_0.20_25/0.4)]"
+                    : "border-white/10 text-white/60 hover:text-white hover:border-white/25"
+                }`}
               >
+                <span className="block text-[10px] tracking-[0.3em] opacity-70 mb-1">SELL</span>
                 SHORT
               </button>
             </div>
-            <label className="block mt-5 text-xs text-white/50">Size</label>
+
+            <label className="block mt-7 text-[10px] tracking-[0.3em] text-white/50 uppercase">
+              Size
+            </label>
             <input
               value={size}
               onChange={(e) => setSize(e.target.value)}
               type="number"
               min="0"
               step="0.1"
-              className="mt-1 w-full bg-background border border-white/10 rounded-md px-3 py-2 text-white tabular-nums focus:outline-none focus:border-primary/50"
+              className="mt-2 w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-lg tabular-nums focus:outline-none focus:border-white/30"
             />
-            <div className="mt-4 flex justify-between text-sm">
-              <span className="text-white/50">Entry Price</span>
-              <span className="text-white tabular-nums">{m.current.toFixed(2)}</span>
+
+            <div className="mt-6 space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-white/50">Market</span>
+                <span className="text-white">{market}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/50">Entry Price</span>
+                <span className="text-white tabular-nums">{m.current.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/50">Direction</span>
+                <span className={dir === "LONG" ? "text-emerald-300" : "text-red-300"}>{dir}</span>
+              </div>
             </div>
-            <div className="mt-2 flex justify-between text-sm">
-              <span className="text-white/50">Estimated PnL</span>
-              <span className="text-white tabular-nums">{estPnl.toFixed(2)}</span>
-            </div>
+
             <button
               disabled={!wallet}
               onClick={onOpen}
-              className="mt-5 w-full py-2.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-7 w-full py-4 rounded-xl bg-white text-[oklch(0.12_0.03_260)] text-sm font-semibold tracking-wide hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              {wallet ? "Open Position" : "Connect Wallet"}
+              {wallet ? `Open ${dir}` : "Connect Wallet"}
             </button>
-            {wallet && <p className="mt-3 text-xs text-white/40 font-mono">Wallet: {shortAddr(wallet)}</p>}
+            {wallet && (
+              <p className="mt-4 text-[11px] text-white/40 font-mono text-center">
+                {shortAddr(wallet)}
+              </p>
+            )}
           </div>
         </div>
 
         {/* Open positions */}
-        <div className="mt-6 rounded-xl bg-card border border-white/5 overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/5 text-white font-medium">Open Positions</div>
+        <div className="mt-10 glass rounded-2xl overflow-hidden">
+          <div className="px-7 py-5 border-b border-white/5 text-white font-medium tracking-tight">
+            Open Positions
+          </div>
           <PositionsTable open={open} />
         </div>
       </div>
@@ -131,36 +189,39 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
   const price = (m: Market) => (m === "GAS" ? gas.current : m === "ACTIVITY" ? act.current : fl.current);
 
   if (!open.length) {
-    return <div className="p-6 text-sm text-white/50">No open positions.</div>;
+    return <div className="p-8 text-sm text-white/50">No open positions.</div>;
   }
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="text-white/50 text-xs uppercase tracking-wider">
+        <thead className="text-white/50 text-[10px] uppercase tracking-[0.25em]">
           <tr>
-            <th className="text-left p-4">Market</th>
-            <th className="text-left p-4">Direction</th>
-            <th className="text-right p-4">Size</th>
-            <th className="text-right p-4">Entry</th>
-            <th className="text-right p-4">Current</th>
-            <th className="text-right p-4">PnL</th>
-            <th className="text-right p-4"></th>
+            <th className="text-left px-6 py-4">Market</th>
+            <th className="text-left px-6 py-4">Direction</th>
+            <th className="text-right px-6 py-4">Size</th>
+            <th className="text-right px-6 py-4">Entry</th>
+            <th className="text-right px-6 py-4">Current</th>
+            <th className="text-right px-6 py-4">PnL</th>
+            <th className="text-right px-6 py-4"></th>
           </tr>
         </thead>
         <tbody>
-          {open.map((p, i) => {
+          {open.map((p) => {
             const cur = price(p.market);
             const v = pnl(p, cur);
             return (
-              <tr key={p.id} className={i % 2 ? "bg-white/[0.02]" : ""}>
-                <td className="p-4 text-white">{p.market}</td>
-                <td className={`p-4 ${p.direction === "LONG" ? "text-emerald-300" : "text-red-300"}`}>{p.direction}</td>
-                <td className="p-4 text-right text-white tabular-nums">{p.size}</td>
-                <td className="p-4 text-right text-white/80 tabular-nums">{p.entry.toFixed(2)}</td>
-                <td className="p-4 text-right text-white tabular-nums">{cur.toFixed(2)}</td>
-                <td className={`p-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>{v.toFixed(2)}</td>
-                <td className="p-4 text-right">
-                  <button onClick={() => closePosition(p.id, cur)} className="px-3 py-1 rounded-md bg-white/5 hover:bg-white/10 text-white text-xs border border-white/10">
+              <tr key={p.id} className="border-t border-white/5">
+                <td className="px-6 py-4 text-white">{p.market}</td>
+                <td className={`px-6 py-4 ${p.direction === "LONG" ? "text-emerald-300" : "text-red-300"}`}>{p.direction}</td>
+                <td className="px-6 py-4 text-right text-white tabular-nums">{p.size}</td>
+                <td className="px-6 py-4 text-right text-white/80 tabular-nums">{p.entry.toFixed(2)}</td>
+                <td className="px-6 py-4 text-right text-white tabular-nums">{cur.toFixed(2)}</td>
+                <td className={`px-6 py-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>{v.toFixed(2)}</td>
+                <td className="px-6 py-4 text-right">
+                  <button
+                    onClick={() => closePosition(p.id, cur)}
+                    className="px-4 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-white text-xs border border-white/10"
+                  >
                     Close
                   </button>
                 </td>

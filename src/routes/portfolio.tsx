@@ -20,21 +20,24 @@ function PortfolioPage() {
 
   return (
     <Layout>
-      <div className="pt-24 pb-16 mx-auto max-w-7xl px-4 sm:px-6">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <h1 className="text-3xl sm:text-4xl font-bold text-white">Portfolio</h1>
+      <div className="pt-32 pb-20 mx-auto max-w-7xl px-5 sm:px-8">
+        <div className="flex items-end justify-between flex-wrap gap-4">
+          <div>
+            <div className="text-xs tracking-[0.3em] text-primary/80 uppercase">Portfolio</div>
+            <h1 className="mt-5 text-4xl sm:text-6xl font-semibold text-white tracking-tight leading-[1.05]">Your positions.</h1>
+          </div>
           {wallet ? (
-            <span className="text-sm text-white/60 font-mono">{shortAddr(wallet)}</span>
+            <span className="text-sm text-white/60 font-mono glass rounded-full px-4 py-2">{shortAddr(wallet)}</span>
           ) : (
-            <button onClick={() => connectWallet()} className="px-4 py-2 rounded-md bg-primary text-white text-sm hover:bg-primary/90">
+            <button onClick={() => connectWallet()} className="px-5 py-2.5 rounded-full bg-white text-[oklch(0.12_0.03_260)] text-sm font-medium hover:bg-white/90">
               Connect Wallet
             </button>
           )}
         </div>
 
         {/* Open positions */}
-        <h2 className="mt-10 text-lg text-white">Open Positions</h2>
-        <div className="mt-3 rounded-xl bg-card border border-white/5 overflow-hidden">
+        <h2 className="mt-14 text-[10px] tracking-[0.3em] text-white/50 uppercase">Open Positions</h2>
+        <div className="mt-4 glass rounded-2xl overflow-hidden">
           {open.length === 0 ? (
             <div className="p-6 text-sm text-white/60">
               No open positions yet. Head to <Link to="/trade" className="text-primary underline-offset-4 hover:underline">Trade</Link> to get started.
@@ -80,8 +83,8 @@ function PortfolioPage() {
         </div>
 
         {/* History */}
-        <h2 className="mt-10 text-lg text-white">Trade History</h2>
-        <div className="mt-3 rounded-xl bg-card border border-white/5 overflow-hidden">
+        <h2 className="mt-14 text-[10px] tracking-[0.3em] text-white/50 uppercase">Trade History</h2>
+        <div className="mt-4 glass rounded-2xl overflow-hidden">
           {hist.length === 0 ? (
             <div className="p-6 text-sm text-white/60">No trade history yet.</div>
           ) : (

@@ -4,7 +4,15 @@ import Splash from "./Splash";
 
 const SHOWN_KEY = "chainflux:splashShown";
 
-export default function Layout({ children, transparentNav = false }: { children: React.ReactNode; transparentNav?: boolean }) {
+export default function Layout({
+  children,
+  transparentNav = false,
+  hideNav = false,
+}: {
+  children: React.ReactNode;
+  transparentNav?: boolean;
+  hideNav?: boolean;
+}) {
   const [showSplash, setShowSplash] = useState(false);
 
   useEffect(() => {
@@ -21,10 +29,13 @@ export default function Layout({ children, transparentNav = false }: { children:
   return (
     <div className="min-h-screen bg-background text-foreground">
       {showSplash && <Splash onDone={done} />}
-      <Navbar transparentOnTop={transparentNav} />
+      {!hideNav && <Navbar transparentOnTop={transparentNav} />}
       <main className="fade-in">{children}</main>
-      <footer className="border-t border-white/5 mt-16">
-        <div className="mx-auto max-w-7xl px-6 py-8 text-sm text-white/40">ChainFlux</div>
+      <footer className="border-t border-white/5 mt-24">
+        <div className="mx-auto max-w-7xl px-6 py-10 text-sm text-white/40 flex flex-wrap items-center justify-between gap-2">
+          <span>ChainFlux</span>
+          <span className="text-white/30">Trade the heartbeat of blockchain</span>
+        </div>
       </footer>
     </div>
   );

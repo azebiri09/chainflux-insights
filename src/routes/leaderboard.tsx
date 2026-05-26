@@ -24,12 +24,13 @@ function short(a: string) { return a.slice(0, 6) + "…" + a.slice(-4); }
 function LeaderboardPage() {
   return (
     <Layout>
-      <div className="pt-24 pb-16 mx-auto max-w-7xl px-4 sm:px-6">
-        <h1 className="text-3xl sm:text-4xl font-bold text-white">Leaderboard</h1>
-        <p className="mt-3 text-white/60 max-w-2xl">
+      <div className="pt-32 pb-20 mx-auto max-w-7xl px-5 sm:px-8">
+        <div className="text-xs tracking-[0.3em] text-primary/80 uppercase">Leaderboard</div>
+        <h1 className="mt-5 text-4xl sm:text-6xl font-semibold text-white tracking-tight leading-[1.05]">Who's calling the market.</h1>
+        <p className="mt-6 text-white/60 max-w-2xl text-lg leading-relaxed">
           See who is calling the market correctly. Where the best onchain traders stand out.
         </p>
-        <div className="mt-8 rounded-xl overflow-hidden border border-white/5 bg-card">
+        <div className="mt-12 glass rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-white/50 text-xs uppercase tracking-wider">
@@ -42,13 +43,13 @@ function LeaderboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
-                  <tr key={r.rank} className={i % 2 ? "bg-white/[0.02]" : ""}>
-                    <td className="p-4 text-white/80">#{r.rank}</td>
-                    <td className="p-4 text-white font-mono">{short(r.addr)}</td>
-                    <td className="p-4 text-right text-emerald-300 tabular-nums">+{r.pnl.toLocaleString()}</td>
-                    <td className="p-4 text-right text-white tabular-nums">+{r.best.toLocaleString()}</td>
-                    <td className="p-4 text-right text-white/80 tabular-nums">{r.trades}</td>
+                {rows.map((r) => (
+                  <tr key={r.rank} className="border-t border-white/5">
+                    <td className="px-6 py-5 text-white/80">#{r.rank}</td>
+                    <td className="px-6 py-5 text-white font-mono text-xs">{short(r.addr)}</td>
+                    <td className="px-6 py-5 text-right text-emerald-300 tabular-nums">+{r.pnl.toLocaleString()}</td>
+                    <td className="px-6 py-5 text-right text-white tabular-nums">+{r.best.toLocaleString()}</td>
+                    <td className="px-6 py-5 text-right text-white/80 tabular-nums">{r.trades}</td>
                   </tr>
                 ))}
               </tbody>
