@@ -1,38 +1,69 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { ethers } from "ethers";
 import type { Market } from "./positions";
 
-const BASE: Record<Market, number> = { GAS: 24.5, ACTIVITY: 1320, FLOW: 875 };
-const VOL: Record<Market, number> = { GAS: 0.8, ACTIVITY: 35, FLOW: 22 };
+const PROXY_ADDRESS = "0x615d3801019D33609Eed27EB39D40AB49fa44fAF";
+const RPC_URL = "https://sepolia-rollup.arbitrum.io/rpc";
 
-// Shared global state so prices stay consistent across components
-type State = { history: Record<Market, number[]>; prev24: Record<Market, number> };
-const state: State = {
-  history: { GAS: seed("GAS"), ACTIVITY: seed("ACTIVITY"), FLOW: seed("FLOW") },
-  prev24: { GAS: BASE.GAS, ACTIVITY: BASE.ACTIVITY, FLOW: BASE.FLOW },
+const ABI = [
+  "function getPrice(uint8 market) external view returns (uint256)"
+];
+
+const MARKET_INDEX: Record<Market, number> = {
+  GAS: 0,
+  ACTIVITY: 1,
+  FLOW: 2
 };
-function seed(m: Market) {
-  const arr: number[] = [];
-  let v = BASE[m];
-  for (let i = 0; i < 20; i++) {
-    v += (Math.random() - 0.5) * VOL[m];
-    arr.push(Math.max(0.1, v));
-  }
-  return arr;
-}
+
+export const MARKET_UNITS: Record<Market, string> = {
+  GAS: "gwei",
+  ACTIVITY: "tx/s",
+  FLOW: "ETH/min"
+};
+
+// Shared global state
+type State = {
+  history: Record<Market, number[]>;
+  prev24: Record<Market, number>;
+};
+
+const state: State = {
+  history: { GAS: [], ACTIVITY: [], FLOW: [] },
+  prev24: { GAS: 0, ACTIVITY: 0, FLOW: 0 },
+};
+
 const listeners = new Set<() => void>();
 let started = false;
-function tick() {
-  (Object.keys(BASE) as Market[]).forEach((m) => {
-    const last = state.history[m][state.history[m].length - 1];
-    const next = Math.max(0.1, last + (Math.random() - 0.5) * VOL[m]);
-    state.history[m] = [...state.history[m].slice(-19), next];
-  });
-  listeners.forEach((l) => l());
+
+async function fetchPrices() {
+  try {
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const contract = new ethers.Contract(PROXY_ADDRESS, ABI, provider);
+
+    const markets: Market[] = ["GAS", "ACTIVITY", "FLOW"];
+
+    await Promise.all(
+      markets.map(async (m) => {
+        const raw: bigint = await contract.getPrice(MARKET_INDEX[m]);
+        const value = Number(raw) / 1e8;
+        if (state.history[m].length === 0) {
+          state.prev24[m] = value;
+        }
+        state.history[m] = [...state.history[m].slice(-19), value];
+      })
+    );
+
+    listeners.forEach((l) => l());
+  } catch (err) {
+    console.error("Price fetch error:", err);
+  }
 }
+
 function ensureTimer() {
   if (started || typeof window === "undefined") return;
   started = true;
-  setInterval(tick, 2400);
+  fetchPrices();
+  setInterval(fetchPrices, 24000);
 }
 
 export function useMarket(m: Market) {
@@ -44,8 +75,10 @@ export function useMarket(m: Market) {
     return () => { listeners.delete(fn); };
   }, []);
   const history = state.history[m];
-  const current = history[history.length - 1];
-  const change = ((current - state.prev24[m]) / state.prev24[m]) * 100;
+  const current = history[history.length - 1] ?? 0;
+  const change = state.prev24[m]
+    ? ((current - state.prev24[m]) / state.prev24[m]) * 100
+    : 0;
   return { history, current, change };
 }
 
@@ -58,7 +91,5 @@ export function useAllMarkets() {
 
 export function getCurrent(m: Market) {
   const h = state.history[m];
-  return h[h.length - 1];
-}
-
-export const MARKET_UNITS: Record<Market, string> = { GAS: "gwei", ACTIVITY: "tx/s", FLOW: "ETH/min" };
+  return h[h.length - 1] ?? 0;
+            }
