@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import Layout from "@/components/Layout";
 import Sparkline from "@/components/Sparkline";
 import { useAllMarkets } from "@/lib/markets";
@@ -37,77 +37,135 @@ const leaderboard = [
 
 function Index() {
   const all = useAllMarkets();
+  const navigate = useNavigate();
   return (
-    <Layout transparentNav>
+    <Layout hideNav>
       {/* Hero */}
-      <section
-        className="relative min-h-[100svh] flex items-center"
-        style={{
-          backgroundImage: `linear-gradient(to bottom, oklch(0.10 0.03 260 / 0.78), oklch(0.16 0.03 260 / 0.95)), url(${heroBg})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
-        <div className="mx-auto max-w-5xl px-6 pt-28 pb-16 text-center">
-          <h1 className="text-4xl sm:text-6xl md:text-7xl font-bold tracking-tight text-white">
-            Markets powered by onchain activity
+      <section className="relative min-h-[100svh] flex items-center overflow-hidden">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `url(${heroBg})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse at 50% 30%, transparent 0%, oklch(0.08 0.02 260 / 0.55) 60%, oklch(0.06 0.02 260 / 0.95) 100%)",
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to bottom, oklch(0.06 0.02 260 / 0.45) 0%, transparent 35%, transparent 60%, oklch(0.08 0.02 260 / 0.95) 100%)",
+          }}
+        />
+
+        <div className="relative mx-auto max-w-5xl px-6 pt-32 pb-24 text-center rise">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass text-[11px] tracking-[0.25em] text-white/70 uppercase">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/90" />
+            Live on Arbitrum
+          </div>
+          <h1 className="mt-8 text-5xl sm:text-7xl md:text-[5.5rem] font-semibold tracking-tight text-white leading-[1.02]">
+            Markets powered by
+            <br />
+            <span className="text-white/70">onchain activity</span>
           </h1>
-          <p className="mt-6 text-base sm:text-lg text-white/70 max-w-2xl mx-auto">
+          <p className="mt-8 text-base sm:text-lg text-white/65 max-w-2xl mx-auto leading-relaxed">
             Trade gas fees, network usage, and capital movement on Arbitrum in real time.
           </p>
-          <div className="mt-10">
-            <Link
-              to="/trade"
-              className="inline-flex items-center justify-center px-6 py-3 rounded-md bg-primary text-white font-medium hover:bg-primary/90 transition-colors"
+          <div className="mt-12">
+            <button
+              onClick={() => navigate({ to: "/trade" })}
+              className="inline-flex items-center justify-center px-8 py-4 rounded-full bg-white text-[oklch(0.12_0.03_260)] font-medium hover:bg-white/90 transition-colors text-sm tracking-wide shadow-[0_20px_60px_-20px_oklch(0.85_0.06_245/0.45)]"
             >
               Start Trading
-            </Link>
+              <svg className="ml-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            </button>
           </div>
         </div>
       </section>
 
+      {/* What is ChainFlux */}
+      <section className="mx-auto max-w-5xl px-6 py-28 sm:py-36">
+        <div className="text-xs tracking-[0.3em] text-primary/80 uppercase">What is ChainFlux</div>
+        <h2 className="mt-5 text-4xl sm:text-5xl font-semibold text-white tracking-tight leading-[1.1]">
+          A market for the things that actually move the chain.
+        </h2>
+        <div className="mt-10 grid gap-6 md:grid-cols-2 text-white/70 text-base leading-relaxed">
+          <p>
+            Crypto has never had a clean way to trade what really matters underneath the price — the demand
+            for blockspace, the pace of activity, the flow of capital. ChainFlux turns those raw onchain
+            signals into liquid markets you can take a position on.
+          </p>
+          <p>
+            Instead of betting on whether a token goes up or down, you trade the network itself.
+            When Arbitrum heats up, gas climbs. When users come back, activity rises. When ETH starts
+            arriving, flow turns positive. Every one of those moments is now tradable.
+          </p>
+        </div>
+      </section>
+
       {/* Markets */}
-      <section className="mx-auto max-w-7xl px-6 py-20 sm:py-28">
-        <div className="grid gap-5 md:grid-cols-3">
+      <section className="mx-auto max-w-7xl px-6 pb-24">
+        <div className="grid gap-6 md:grid-cols-3">
           {markets.map((m) => (
-            <div key={m.code} className="rounded-xl bg-card p-6 border border-white/5">
-              <div className="text-xs tracking-widest text-primary/80">{m.code}</div>
-              <h3 className="mt-2 text-xl font-semibold text-white">{m.name}</h3>
-              <p className="mt-4 text-sm text-white/70">{m.desc}</p>
-              <p className="mt-2 text-sm text-white/50">{m.sub}</p>
+            <div key={m.code} className="glass rounded-2xl p-7">
+              <div className="text-[10px] tracking-[0.3em] text-primary/80 uppercase">{m.code}</div>
+              <h3 className="mt-3 text-2xl font-semibold text-white tracking-tight">{m.name}</h3>
+              <p className="mt-5 text-sm text-white/75 leading-relaxed">{m.desc}</p>
+              <p className="mt-3 text-sm text-white/50 leading-relaxed">{m.sub}</p>
             </div>
           ))}
         </div>
       </section>
 
+      {/* Why it exists */}
+      <section className="mx-auto max-w-5xl px-6 py-24">
+        <div className="text-xs tracking-[0.3em] text-primary/80 uppercase">Why it exists</div>
+        <h2 className="mt-5 text-4xl sm:text-5xl font-semibold text-white tracking-tight leading-[1.1]">
+          Price is the last thing to move.
+        </h2>
+        <p className="mt-8 text-white/70 text-lg leading-relaxed max-w-3xl">
+          By the time a token rallies, the signal has already been onchain for hours. Builders, analysts and
+          serious traders have always watched gas, transactions and flow to feel the network in real time.
+          ChainFlux gives that feed a price — so you can trade conviction the moment you see it, not after
+          the candle has already printed.
+        </p>
+      </section>
+
       {/* How it works */}
-      <section className="mx-auto max-w-7xl px-6 py-16">
-        <h2 className="text-3xl sm:text-4xl font-bold text-white">How It Works</h2>
-        <div className="mt-10 grid gap-5 md:grid-cols-4">
+      <section className="mx-auto max-w-7xl px-6 py-20">
+        <h2 className="text-4xl sm:text-5xl font-semibold text-white tracking-tight">How It Works</h2>
+        <div className="mt-14 grid gap-6 md:grid-cols-4">
           {steps.map((s, i) => (
-            <div key={i} className="rounded-xl bg-card/60 p-6 border border-white/5">
-              <div className="text-sm text-primary/80">Step {i + 1}</div>
-              <p className="mt-3 text-white/85">{s}</p>
+            <div key={i} className="glass rounded-2xl p-7 min-h-[180px] flex flex-col">
+              <div className="text-[10px] tracking-[0.3em] text-primary/80 uppercase">Step {i + 1}</div>
+              <p className="mt-5 text-white/85 text-base leading-relaxed">{s}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* Network feed preview */}
-      <section className="mx-auto max-w-7xl px-6 py-20">
-        <h2 className="text-3xl sm:text-4xl font-bold text-white">Network Feed</h2>
-        <p className="mt-3 text-white/60 max-w-2xl">
+      <section className="mx-auto max-w-7xl px-6 py-28">
+        <h2 className="text-4xl sm:text-5xl font-semibold text-white tracking-tight">Network Feed</h2>
+        <p className="mt-5 text-white/60 max-w-2xl text-lg leading-relaxed">
           A live market for Arbitrum activity. Track GAS, ACTIVITY, and FLOW as the chain moves in real time.
         </p>
-        <div className="mt-8 grid gap-5 md:grid-cols-3">
+        <div className="mt-12 grid gap-6 md:grid-cols-3">
           {(["GAS", "ACTIVITY", "FLOW"] as const).map((k) => (
-            <div key={k} className="rounded-xl bg-card p-5 border border-white/5">
+            <div key={k} className="glass rounded-2xl p-6">
               <div className="flex items-baseline justify-between">
-                <div className="text-xs tracking-widest text-white/50">{k}</div>
-                <div className="text-lg text-white tabular-nums">{all[k].current.toFixed(2)}</div>
+                <div className="text-[10px] tracking-[0.3em] text-white/50 uppercase">{k}</div>
+                <div className="text-xl text-white tabular-nums font-medium">{all[k].current.toFixed(2)}</div>
               </div>
-              <div className="mt-3 text-primary/80">
-                <Sparkline data={all[k].history} stroke="oklch(0.75 0.10 245)" />
+              <div className="mt-4 text-primary/80">
+                <Sparkline data={all[k].history} stroke="oklch(0.78 0.10 245)" />
               </div>
             </div>
           ))}
@@ -115,26 +173,46 @@ function Index() {
       </section>
 
       {/* Leaderboard preview */}
-      <section className="mx-auto max-w-7xl px-6 py-20">
-        <h2 className="text-3xl sm:text-4xl font-bold text-white">Leaderboard</h2>
-        <p className="mt-3 text-white/60 max-w-2xl">
+      <section className="mx-auto max-w-7xl px-6 py-24">
+        <h2 className="text-4xl sm:text-5xl font-semibold text-white tracking-tight">Leaderboard</h2>
+        <p className="mt-5 text-white/60 max-w-2xl text-lg leading-relaxed">
           See who is calling the market correctly. Where the best onchain traders stand out.
         </p>
-        <div className="mt-8 overflow-hidden rounded-xl bg-card border border-white/5">
+        <div className="mt-12 glass rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="text-white/50 text-xs uppercase tracking-wider">
-              <tr><th className="text-left p-4">Rank</th><th className="text-left p-4">Wallet</th><th className="text-right p-4">Total PnL</th></tr>
+            <thead className="text-white/50 text-[10px] uppercase tracking-[0.25em]">
+              <tr>
+                <th className="text-left px-6 py-5">Rank</th>
+                <th className="text-left px-6 py-5">Wallet</th>
+                <th className="text-right px-6 py-5">Total PnL</th>
+              </tr>
             </thead>
             <tbody>
-              {leaderboard.map((r, i) => (
-                <tr key={r.rank} className={i % 2 ? "bg-white/[0.02]" : ""}>
-                  <td className="p-4 text-white/80">#{r.rank}</td>
-                  <td className="p-4 text-white font-mono">{r.addr}</td>
-                  <td className="p-4 text-right text-emerald-400/90 tabular-nums">{r.pnl}</td>
+              {leaderboard.map((r) => (
+                <tr key={r.rank} className="border-t border-white/5">
+                  <td className="px-6 py-5 text-white/80">#{r.rank}</td>
+                  <td className="px-6 py-5 text-white font-mono text-xs">{r.addr}</td>
+                  <td className="px-6 py-5 text-right text-emerald-300/90 tabular-nums">{r.pnl}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="mx-auto max-w-4xl px-6 py-32 text-center">
+        <h2 className="text-4xl sm:text-6xl font-semibold text-white tracking-tight leading-[1.05]">
+          The chain has a pulse. Trade it.
+        </h2>
+        <div className="mt-12">
+          <button
+            onClick={() => navigate({ to: "/trade" })}
+            className="inline-flex items-center justify-center px-8 py-4 rounded-full bg-white text-[oklch(0.12_0.03_260)] font-medium hover:bg-white/90 transition-colors text-sm tracking-wide"
+          >
+            Start Trading
+            <svg className="ml-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </button>
         </div>
       </section>
     </Layout>
