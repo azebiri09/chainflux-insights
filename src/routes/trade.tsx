@@ -47,19 +47,6 @@ function TradePage() {
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Chart panel */}
           <div className="lg:col-span-2 glass rounded-2xl p-6 sm:p-8 relative overflow-hidden">
-            {/* Watermark */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0 flex items-center justify-center select-none"
-            >
-              <span
-                className="font-semibold tracking-[0.15em] text-white/[0.035]"
-                style={{ fontSize: "clamp(64px, 14vw, 200px)" }}
-              >
-                CHAINFLUX
-              </span>
-            </div>
-
             <div className="relative">
               <div className="flex flex-wrap items-center gap-2 mb-6">
                 {MARKETS.map((mm) => (

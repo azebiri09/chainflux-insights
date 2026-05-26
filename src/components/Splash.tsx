@@ -7,7 +7,7 @@ export default function Splash({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     const start = performance.now();
-    const dur = 5000;
+    const dur = 3000;
     let raf = 0;
     const step = (t: number) => {
       const p = Math.min(100, Math.round(((t - start) / dur) * 100));
