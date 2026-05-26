@@ -18,15 +18,28 @@ function TradePage() {
   const [market, setMarket] = useState<Market>("GAS");
   const [dir, setDir] = useState<"LONG" | "SHORT">("LONG");
   const [size, setSize] = useState<string>("1");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
   const wallet = useWallet();
   const m = useMarket(market);
-  const { open } = usePositions();
+  const { open } = usePositions(wallet);
 
   const sizeNum = Number(size) || 0;
 
-  const onOpen = () => {
+  const onOpen = async () => {
     if (!wallet || sizeNum <= 0) return;
-    openPosition({ market, direction: dir, size: sizeNum, entry: m.current });
+    setLoading(true);
+    setError(null);
+    setTxHash(null);
+    try {
+      await openPosition(market, dir === "LONG", sizeNum);
+      setTxHash("Position opened successfully!");
+    } catch (e: any) {
+      setError(e?.message || "Transaction failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -41,6 +54,18 @@ function TradePage() {
             >
               Connect Wallet
             </button>
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-6 glass rounded-2xl p-4 border border-red-500/30 text-red-300 text-sm">
+            {error}
+          </div>
+        )}
+
+        {txHash && (
+          <div className="mb-6 glass rounded-2xl p-4 border border-emerald-500/30 text-emerald-300 text-sm">
+            {txHash}
           </div>
         )}
 
@@ -140,14 +165,18 @@ function TradePage() {
                 <span className="text-white/50">Direction</span>
                 <span className={dir === "LONG" ? "text-emerald-300" : "text-red-300"}>{dir}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-white/50">Fee (0.3%)</span>
+                <span className="text-white tabular-nums">{(sizeNum * 0.003).toFixed(4)} ETH</span>
+              </div>
             </div>
 
             <button
-              disabled={!wallet}
+              disabled={!wallet || loading}
               onClick={onOpen}
               className="mt-7 w-full py-4 rounded-xl bg-white text-[oklch(0.12_0.03_260)] text-sm font-semibold tracking-wide hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              {wallet ? `Open ${dir}` : "Connect Wallet"}
+              {loading ? "Confirming..." : wallet ? `Open ${dir}` : "Connect Wallet"}
             </button>
             {wallet && (
               <p className="mt-4 text-[11px] text-white/40 font-mono text-center">
@@ -170,14 +199,32 @@ function TradePage() {
 }
 
 function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"] }) {
+  const [closing, setClosing] = useState<string | null>(null);
   const gas = useMarket("GAS");
   const act = useMarket("ACTIVITY");
   const fl = useMarket("FLOW");
-  const price = (m: Market) => (m === "GAS" ? gas.current : m === "ACTIVITY" ? act.current : fl.current);
+  const price = (m: Market) =>
+    m === "GAS" ? gas.current : m === "ACTIVITY" ? act.current : fl.current;
+
+  const onClose = async (id: string, cur: number) => {
+    setClosing(id);
+    try {
+      await closePosition(id, cur);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setClosing(null);
+    }
+  };
 
   if (!open.length) {
-    return <div className="p-8 text-sm text-white/50">No open positions.</div>;
+    return (
+      <div className="p-8 text-sm text-white/50">
+        No open positions yet. Head to the position builder to get started.
+      </div>
+    );
   }
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -199,17 +246,22 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
             return (
               <tr key={p.id} className="border-t border-white/5">
                 <td className="px-6 py-4 text-white">{p.market}</td>
-                <td className={`px-6 py-4 ${p.direction === "LONG" ? "text-emerald-300" : "text-red-300"}`}>{p.direction}</td>
+                <td className={`px-6 py-4 ${p.direction === "LONG" ? "text-emerald-300" : "text-red-300"}`}>
+                  {p.direction}
+                </td>
                 <td className="px-6 py-4 text-right text-white tabular-nums">{p.size}</td>
                 <td className="px-6 py-4 text-right text-white/80 tabular-nums">{p.entry.toFixed(2)}</td>
                 <td className="px-6 py-4 text-right text-white tabular-nums">{cur.toFixed(2)}</td>
-                <td className={`px-6 py-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>{v.toFixed(2)}</td>
+                <td className={`px-6 py-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                  {v.toFixed(2)}
+                </td>
                 <td className="px-6 py-4 text-right">
                   <button
-                    onClick={() => closePosition(p.id, cur)}
-                    className="px-4 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-white text-xs border border-white/10"
+                    onClick={() => onClose(p.id, cur)}
+                    disabled={closing === p.id}
+                    className="px-4 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-white text-xs border border-white/10 disabled:opacity-40"
                   >
-                    Close
+                    {closing === p.id ? "Closing..." : "Close"}
                   </button>
                 </td>
               </tr>
