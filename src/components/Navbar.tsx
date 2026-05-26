@@ -26,8 +26,8 @@ export default function Navbar({ transparentOnTop = false }: { transparentOnTop?
 
   return (
     <header
-      className={`fixed top-0 inset-x-0 z-50 transition-colors duration-300 ${
-        solid ? "bg-[oklch(0.16_0.03_260)/0.85] backdrop-blur-md border-b border-white/5" : "bg-transparent"
+      className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
+        solid ? "backdrop-blur-xl bg-[oklch(0.10_0.025_260)/0.6] border-b border-white/10" : "bg-transparent"
       }`}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between">
