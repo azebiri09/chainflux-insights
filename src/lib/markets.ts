@@ -6,7 +6,7 @@ const PROXY_ADDRESS = "0x615d3801019D33609Eed27EB39D40AB49fa44fAF";
 const RPC_URL = "https://sepolia-rollup.arbitrum.io/rpc";
 
 const ABI = [
-  "function getPrice(uint8 market) external view returns (uint256)"
+  "function getMarket(uint8 m) external view returns (uint256 price, uint256 updatedAt, uint256 longOI, uint256 shortOI)"
 ];
 
 const MARKET_INDEX: Record<Market, number> = {
@@ -21,7 +21,6 @@ export const MARKET_UNITS: Record<Market, string> = {
   FLOW: "ETH/min"
 };
 
-// Shared global state
 type State = {
   history: Record<Market, number[]>;
   prev24: Record<Market, number>;
@@ -44,8 +43,8 @@ async function fetchPrices() {
 
     await Promise.all(
       markets.map(async (m) => {
-        const raw: bigint = await contract.getPrice(MARKET_INDEX[m]);
-        const value = Number(raw) / 1e8;
+        const result = await contract.getMarket(MARKET_INDEX[m]);
+        const value = Number(result.price) / 1e18;
         if (state.history[m].length === 0) {
           state.prev24[m] = value;
         }
@@ -92,4 +91,4 @@ export function useAllMarkets() {
 export function getCurrent(m: Market) {
   const h = state.history[m];
   return h[h.length - 1] ?? 0;
-            }
+  }
