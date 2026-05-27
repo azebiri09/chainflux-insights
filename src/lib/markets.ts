@@ -48,7 +48,11 @@ async function fetchPrices() {
         if (state.history[m].length === 0) {
           state.prev24[m] = value;
         }
-        state.history[m] = [...state.history[m].slice(-19), value];
+        // Store first value as 24h baseline once we have 8640 ticks (24h at 10s)
+        if (state.history[m].length === 8640) {
+          state.prev24[m] = state.history[m][0];
+        }
+        state.history[m] = [...state.history[m].slice(-99), value];
       })
     );
 
@@ -62,7 +66,7 @@ function ensureTimer() {
   if (started || typeof window === "undefined") return;
   started = true;
   fetchPrices();
-  setInterval(fetchPrices, 24000);
+  setInterval(fetchPrices, 10000); // ✅ was 24000
 }
 
 export function useMarket(m: Market) {
