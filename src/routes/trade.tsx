@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import Layout from "@/components/Layout";
-import Candles from "@/components/Candles";
+import TradingChart from "@/components/TradingChart";
 import { MARKET_UNITS, useMarket } from "@/lib/markets";
 import type { Market } from "@/lib/positions";
 import { closePosition, openPosition, pnl, usePositions } from "@/lib/positions";
@@ -15,94 +15,12 @@ export const Route = createFileRoute("/trade")({
 const MARKETS: Market[] = ["GAS", "ACTIVITY", "FLOW"];
 const TIMEFRAMES = ["1m", "5m", "15m", "1h"] as const;
 type Timeframe = typeof TIMEFRAMES[number];
-
 const TIMEFRAME_TICKS: Record<Timeframe, number> = {
-  "1m": 6,
-  "5m": 30,
-  "15m": 90,
-  "1h": 360,
+  "1m": 6,    // 6 ticks × 10s = 1 minute
+  "5m": 30,   // 30 ticks × 10s = 5 minutes
+  "15m": 90,  // 90 ticks × 10s = 15 minutes
+  "1h": 360,  // 360 ticks × 10s = 1 hour
 };
-
-function LineChart({ data, height = 300 }: { data: number[]; height?: number }) {
-  if (data.length < 2) return null;
-
-  const w = 800;
-  const padY = 20;
-  const padX = 10;
-  const min = Math.min(...data) * 0.999;
-  const max = Math.max(...data) * 1.001;
-  const range = max - min || 1;
-  const scaleY = (v: number) => padY + (1 - (v - min) / range) * (height - padY * 2);
-  const scaleX = (i: number) => padX + (i / (data.length - 1)) * (w - padX * 2);
-
-  const points = data.map((v, i) => `${scaleX(i)},${scaleY(v)}`).join(" ");
-  const areaPoints = [
-    `${scaleX(0)},${height}`,
-    ...data.map((v, i) => `${scaleX(i)},${scaleY(v)}`),
-    `${scaleX(data.length - 1)},${height}`,
-  ].join(" ");
-
-  const up = data[data.length - 1] >= data[0];
-  const color = up ? "oklch(0.78 0.16 155)" : "oklch(0.70 0.20 25)";
-  const areaColor = up ? "oklch(0.78 0.16 155 / 0.1)" : "oklch(0.70 0.20 25 / 0.1)";
-
-  return (
-    <svg viewBox={`0 0 ${w} ${height}`} width="100%" height={height} preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.15" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-
-      {/* Grid lines */}
-      {[0.25, 0.5, 0.75].map((p) => (
-        <line
-          key={p}
-          x1={padX} x2={w - padX}
-          y1={padY + p * (height - padY * 2)}
-          y2={padY + p * (height - padY * 2)}
-          stroke="oklch(1 0 0 / 0.06)"
-          strokeWidth={1}
-          strokeDasharray="4 4"
-        />
-      ))}
-
-      {/* Area fill */}
-      <polygon points={areaPoints} fill="url(#lineGrad)" />
-
-      {/* Line */}
-      <polyline
-        points={points}
-        fill="none"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-
-      {/* Last price dot */}
-      <circle
-        cx={scaleX(data.length - 1)}
-        cy={scaleY(data[data.length - 1])}
-        r={4}
-        fill={color}
-        opacity={0.9}
-      />
-
-      {/* Last price line */}
-      <line
-        x1={padX} x2={w - padX}
-        y1={scaleY(data[data.length - 1])}
-        y2={scaleY(data[data.length - 1])}
-        stroke={color}
-        strokeWidth={1}
-        strokeDasharray="6 3"
-        opacity={0.3}
-      />
-    </svg>
-  );
-}
 
 function TradePage() {
   const [market, setMarket] = useState<Market>("GAS");
@@ -121,13 +39,11 @@ function TradePage() {
 
   const sizeNum = Number(size) || 0;
 
-  // Slice history based on timeframe and zoom
   const visibleData = useMemo(() => {
     const ticks = Math.floor(TIMEFRAME_TICKS[timeframe] / zoom);
     return m.history.slice(-Math.max(ticks, 4));
   }, [m.history, timeframe, zoom]);
 
-  // % change for selected timeframe
   const tfChange = useMemo(() => {
     if (visibleData.length < 2) return 0;
     const first = visibleData[0];
@@ -221,8 +137,6 @@ function TradePage() {
 
               {/* Chart controls */}
               <div className="mt-6 flex items-center justify-between flex-wrap gap-3">
-
-                {/* Timeframe selector */}
                 <div className="flex items-center gap-1">
                   {TIMEFRAMES.map((tf) => (
                     <button
@@ -239,9 +153,7 @@ function TradePage() {
                   ))}
                 </div>
 
-                {/* Right side controls */}
                 <div className="flex items-center gap-3">
-                  {/* Zoom */}
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setZoom((z) => Math.min(z * 2, 8))}
@@ -257,7 +169,6 @@ function TradePage() {
                     </button>
                   </div>
 
-                  {/* Chart type toggle */}
                   <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
                     <button
                       onClick={() => setChartType("line")}
@@ -283,12 +194,12 @@ function TradePage() {
                 </div>
               </div>
 
-              {/* Chart */}
-              <div className="mt-4">
-                {chartType === "line"
-                  ? <LineChart data={visibleData} height={300} />
-                  : <Candles data={visibleData} height={300} />
-                }
+              {/* Chart — touch action none prevents page scroll */}
+              <div
+                className="mt-4 rounded-xl overflow-hidden"
+                style={{ touchAction: "none" }}
+              >
+                <TradingChart data={visibleData} type={chartType} height={300} />
               </div>
 
             </div>
@@ -461,4 +372,4 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
       </table>
     </div>
   );
-    }
+                             }
