@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Layout from "@/components/Layout";
 import Candles from "@/components/Candles";
 import { MARKET_UNITS, useMarket } from "@/lib/markets";
@@ -13,6 +13,96 @@ export const Route = createFileRoute("/trade")({
 });
 
 const MARKETS: Market[] = ["GAS", "ACTIVITY", "FLOW"];
+const TIMEFRAMES = ["1m", "5m", "15m", "1h"] as const;
+type Timeframe = typeof TIMEFRAMES[number];
+
+const TIMEFRAME_TICKS: Record<Timeframe, number> = {
+  "1m": 6,
+  "5m": 30,
+  "15m": 90,
+  "1h": 360,
+};
+
+function LineChart({ data, height = 300 }: { data: number[]; height?: number }) {
+  if (data.length < 2) return null;
+
+  const w = 800;
+  const padY = 20;
+  const padX = 10;
+  const min = Math.min(...data) * 0.999;
+  const max = Math.max(...data) * 1.001;
+  const range = max - min || 1;
+  const scaleY = (v: number) => padY + (1 - (v - min) / range) * (height - padY * 2);
+  const scaleX = (i: number) => padX + (i / (data.length - 1)) * (w - padX * 2);
+
+  const points = data.map((v, i) => `${scaleX(i)},${scaleY(v)}`).join(" ");
+  const areaPoints = [
+    `${scaleX(0)},${height}`,
+    ...data.map((v, i) => `${scaleX(i)},${scaleY(v)}`),
+    `${scaleX(data.length - 1)},${height}`,
+  ].join(" ");
+
+  const up = data[data.length - 1] >= data[0];
+  const color = up ? "oklch(0.78 0.16 155)" : "oklch(0.70 0.20 25)";
+  const areaColor = up ? "oklch(0.78 0.16 155 / 0.1)" : "oklch(0.70 0.20 25 / 0.1)";
+
+  return (
+    <svg viewBox={`0 0 ${w} ${height}`} width="100%" height={height} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.15" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {/* Grid lines */}
+      {[0.25, 0.5, 0.75].map((p) => (
+        <line
+          key={p}
+          x1={padX} x2={w - padX}
+          y1={padY + p * (height - padY * 2)}
+          y2={padY + p * (height - padY * 2)}
+          stroke="oklch(1 0 0 / 0.06)"
+          strokeWidth={1}
+          strokeDasharray="4 4"
+        />
+      ))}
+
+      {/* Area fill */}
+      <polygon points={areaPoints} fill="url(#lineGrad)" />
+
+      {/* Line */}
+      <polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+
+      {/* Last price dot */}
+      <circle
+        cx={scaleX(data.length - 1)}
+        cy={scaleY(data[data.length - 1])}
+        r={4}
+        fill={color}
+        opacity={0.9}
+      />
+
+      {/* Last price line */}
+      <line
+        x1={padX} x2={w - padX}
+        y1={scaleY(data[data.length - 1])}
+        y2={scaleY(data[data.length - 1])}
+        stroke={color}
+        strokeWidth={1}
+        strokeDasharray="6 3"
+        opacity={0.3}
+      />
+    </svg>
+  );
+}
 
 function TradePage() {
   const [market, setMarket] = useState<Market>("GAS");
@@ -21,11 +111,29 @@ function TradePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [chartType, setChartType] = useState<"line" | "candle">("line");
+  const [timeframe, setTimeframe] = useState<Timeframe>("5m");
+  const [zoom, setZoom] = useState(1);
+
   const wallet = useWallet();
   const m = useMarket(market);
   const { open } = usePositions(wallet);
 
   const sizeNum = Number(size) || 0;
+
+  // Slice history based on timeframe and zoom
+  const visibleData = useMemo(() => {
+    const ticks = Math.floor(TIMEFRAME_TICKS[timeframe] / zoom);
+    return m.history.slice(-Math.max(ticks, 4));
+  }, [m.history, timeframe, zoom]);
+
+  // % change for selected timeframe
+  const tfChange = useMemo(() => {
+    if (visibleData.length < 2) return 0;
+    const first = visibleData[0];
+    const last = visibleData[visibleData.length - 1];
+    return first ? ((last - first) / first) * 100 : 0;
+  }, [visibleData]);
 
   const onOpen = async () => {
     if (!wallet || sizeNum <= 0) return;
@@ -33,7 +141,7 @@ function TradePage() {
     setError(null);
     setTxHash(null);
     try {
-      await openPosition(market, dir, sizeNum); // ✅ pass dir directly, not boolean
+      await openPosition(market, dir, sizeNum);
       setTxHash("Position opened successfully!");
     } catch (e: any) {
       setError(e?.message || "Transaction failed");
@@ -73,6 +181,8 @@ function TradePage() {
           {/* Chart panel */}
           <div className="lg:col-span-2 glass rounded-2xl p-6 sm:p-8 relative overflow-hidden">
             <div className="relative">
+
+              {/* Market selector */}
               <div className="flex flex-wrap items-center gap-2 mb-6">
                 {MARKETS.map((mm) => (
                   <button
@@ -88,27 +198,99 @@ function TradePage() {
                   </button>
                 ))}
               </div>
+
+              {/* Price display */}
               <div className="flex items-baseline gap-4 flex-wrap">
                 <div className="text-5xl sm:text-6xl text-white tabular-nums font-semibold tracking-tight">
-                  {m.current.toFixed(2)}
+                  {m.current.toFixed(4)}
                 </div>
                 <div className="text-xs text-white/40 tracking-widest uppercase">
                   {MARKET_UNITS[market]}
                 </div>
                 <div
                   className={`text-sm tabular-nums px-3 py-1 rounded-full border ${
-                    m.change >= 0
+                    tfChange >= 0
                       ? "text-emerald-300 border-emerald-500/30 bg-emerald-500/5"
                       : "text-red-300 border-red-500/30 bg-red-500/5"
                   }`}
                 >
-                  {m.change >= 0 ? "+" : ""}
-                  {m.change.toFixed(2)}% 24h
+                  {tfChange >= 0 ? "+" : ""}
+                  {tfChange.toFixed(2)}% {timeframe}
                 </div>
               </div>
-              <div className="mt-8">
-                <Candles data={m.history} height={300} />
+
+              {/* Chart controls */}
+              <div className="mt-6 flex items-center justify-between flex-wrap gap-3">
+
+                {/* Timeframe selector */}
+                <div className="flex items-center gap-1">
+                  {TIMEFRAMES.map((tf) => (
+                    <button
+                      key={tf}
+                      onClick={() => setTimeframe(tf)}
+                      className={`px-3 py-1 rounded text-xs tracking-wider uppercase transition-colors ${
+                        timeframe === tf
+                          ? "bg-white/10 text-white"
+                          : "text-white/40 hover:text-white/70"
+                      }`}
+                    >
+                      {tf}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Right side controls */}
+                <div className="flex items-center gap-3">
+                  {/* Zoom */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setZoom((z) => Math.min(z * 2, 8))}
+                      className="w-7 h-7 rounded flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 text-lg transition-colors"
+                    >
+                      +
+                    </button>
+                    <button
+                      onClick={() => setZoom((z) => Math.max(z / 2, 0.25))}
+                      className="w-7 h-7 rounded flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 text-lg transition-colors"
+                    >
+                      −
+                    </button>
+                  </div>
+
+                  {/* Chart type toggle */}
+                  <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
+                    <button
+                      onClick={() => setChartType("line")}
+                      className={`px-3 py-1 rounded text-xs transition-colors ${
+                        chartType === "line"
+                          ? "bg-white/10 text-white"
+                          : "text-white/40 hover:text-white/70"
+                      }`}
+                    >
+                      Line
+                    </button>
+                    <button
+                      onClick={() => setChartType("candle")}
+                      className={`px-3 py-1 rounded text-xs transition-colors ${
+                        chartType === "candle"
+                          ? "bg-white/10 text-white"
+                          : "text-white/40 hover:text-white/70"
+                      }`}
+                    >
+                      Candle
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              {/* Chart */}
+              <div className="mt-4">
+                {chartType === "line"
+                  ? <LineChart data={visibleData} height={300} />
+                  : <Candles data={visibleData} height={300} />
+                }
+              </div>
+
             </div>
           </div>
 
@@ -254,10 +436,10 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
                   {p.direction}
                 </td>
                 <td className="px-6 py-4 text-right text-white tabular-nums">
-                  {p.collateral.toFixed(4)} ETH {/* ✅ was p.size */}
+                  {p.collateral.toFixed(4)} ETH
                 </td>
                 <td className="px-6 py-4 text-right text-white/80 tabular-nums">
-                  {p.entryPrice.toFixed(4)} {/* ✅ was p.entry */}
+                  {p.entryPrice.toFixed(4)}
                 </td>
                 <td className="px-6 py-4 text-right text-white tabular-nums">{cur.toFixed(4)}</td>
                 <td className={`px-6 py-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>
@@ -279,4 +461,4 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
       </table>
     </div>
   );
-  }
+    }
