@@ -6,33 +6,25 @@ export type Position = {
   id: string;
   market: Market;
   direction: "LONG" | "SHORT";
-  size: number;
-  entry: number;
+  collateral: number;
+  entryPrice: number;
   openedAt: number;
   closedAt?: number;
-  close?: number;
+  closePrice?: number;
 };
 
 const PROXY_ADDRESS = "0x615d3801019D33609Eed27EB39D40AB49fa44fAF";
 
 const ABI = [
-  "function openPosition(uint8 market, bool isLong, uint256 size) external payable",
-  "function closePosition(uint256 positionId) external",
-  "function getPosition(uint256 positionId) external view returns (address trader, uint8 market, bool isLong, uint256 size, uint256 entryPrice, bool isOpen)",
-  "function getUserPositions(address user) external view returns (uint256[])"
+  "function openPosition(uint8 market, uint8 direction) external payable",
+  "function closePosition(uint256 id) external",
+  "function getPosition(uint256 id) external view returns (address trader, uint8 market, uint8 direction, uint256 collateral, uint256 size, uint256 entryPrice, uint256 openedAt, uint256 cftMinted, bool open)",
+  "function getUserPositions(address user) external view returns (uint256[])",
+  "function getMarket(uint8 m) external view returns (uint256 price, uint256 updatedAt, uint256 longOI, uint256 shortOI)"
 ];
 
-const MARKET_INDEX: Record<Market, number> = {
-  GAS: 0,
-  ACTIVITY: 1,
-  FLOW: 2
-};
-
-const INDEX_MARKET: Record<number, Market> = {
-  0: "GAS",
-  1: "ACTIVITY",
-  2: "FLOW"
-};
+const MARKET_INDEX: Record<Market, number> = { GAS: 0, ACTIVITY: 1, FLOW: 2 };
+const INDEX_MARKET: Record<number, Market> = { 0: "GAS", 1: "ACTIVITY", 2: "FLOW" };
 
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
@@ -40,7 +32,6 @@ const notify = () => listeners.forEach((l) => l());
 let cachedOpen: Position[] = [];
 let cachedHist: Position[] = [];
 
-// Local history storage
 const HIST_KEY = "chainflux:positions:history";
 function readHist(): Position[] {
   if (typeof window === "undefined") return [];
@@ -52,21 +43,19 @@ function writeHist(v: Position[]) {
 
 export async function openPosition(
   market: Market,
-  isLong: boolean,
-  size: number
+  direction: "LONG" | "SHORT",
+  collateralEth: number
 ): Promise<void> {
   if (!window.ethereum) throw new Error("No wallet");
   const provider = new ethers.BrowserProvider(window.ethereum);
   const signer = await provider.getSigner();
   const contract = new ethers.Contract(PROXY_ADDRESS, ABI, signer);
 
-  const fee = ethers.parseEther((size * 0.003).toFixed(6));
-  const tx = await contract.openPosition(
-    MARKET_INDEX[market],
-    isLong,
-    ethers.parseUnits(size.toString(), 8),
-    { value: fee }
-  );
+  const marketIndex = MARKET_INDEX[market];
+  const directionIndex = direction === "LONG" ? 0 : 1;
+  const value = ethers.parseEther(collateralEth.toFixed(6));
+
+  const tx = await contract.openPosition(marketIndex, directionIndex, { value });
   await tx.wait();
   await refreshPositions(await signer.getAddress());
 }
@@ -83,11 +72,10 @@ export async function closePosition(
   const tx = await contract.closePosition(BigInt(positionId));
   await tx.wait();
 
-  // Move to local history
   const closed = cachedOpen.find((p) => p.id === positionId);
   if (closed) {
     const hist = readHist();
-    hist.unshift({ ...closed, close: currentPrice, closedAt: Date.now() });
+    hist.unshift({ ...closed, closePrice: currentPrice, closedAt: Date.now() });
     writeHist(hist);
   }
 
@@ -96,9 +84,7 @@ export async function closePosition(
 
 export async function refreshPositions(address: string): Promise<void> {
   try {
-    const provider = new ethers.JsonRpcProvider(
-      "https://sepolia-rollup.arbitrum.io/rpc"
-    );
+    const provider = new ethers.JsonRpcProvider("https://sepolia-rollup.arbitrum.io/rpc");
     const contract = new ethers.Contract(PROXY_ADDRESS, ABI, provider);
 
     const ids: bigint[] = await contract.getUserPositions(address);
@@ -107,14 +93,14 @@ export async function refreshPositions(address: string): Promise<void> {
     await Promise.all(
       ids.map(async (id) => {
         const p = await contract.getPosition(id);
-        if (p.isOpen) {
+        if (p.open) {
           positions.push({
             id: id.toString(),
             market: INDEX_MARKET[Number(p.market)],
-            direction: p.isLong ? "LONG" : "SHORT",
-            size: Number(ethers.formatUnits(p.size, 8)),
-            entry: Number(p.entryPrice) / 1e8,
-            openedAt: Date.now(),
+            direction: Number(p.direction) === 0 ? "LONG" : "SHORT",
+            collateral: Number(ethers.formatEther(p.collateral)),
+            entryPrice: Number(p.entryPrice) / 1e18,
+            openedAt: Number(p.openedAt) * 1000,
           });
         }
       })
@@ -146,9 +132,9 @@ export function usePositions(address?: string | null) {
   return { open, hist };
 }
 
-export function pnl(p: Position, current: number) {
+export function pnl(p: Position, currentPrice: number): number {
   const diff = p.direction === "LONG"
-    ? current - p.entry
-    : p.entry - current;
-  return diff * p.size;
-                                       }
+    ? currentPrice - p.entryPrice
+    : p.entryPrice - currentPrice;
+  return (diff / p.entryPrice) * p.collateral;
+}
