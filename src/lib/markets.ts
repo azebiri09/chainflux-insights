@@ -45,13 +45,15 @@ async function fetchPrices() {
       markets.map(async (m) => {
         const result = await contract.getMarket(MARKET_INDEX[m]);
         const value = Number(result.price) / 1e18;
+
         if (state.history[m].length === 0) {
+          // First load — lock this as baseline
           state.prev24[m] = value;
-        }
-        // Store first value as 24h baseline once we have 8640 ticks (24h at 10s)
-        if (state.history[m].length === 8640) {
+        } else if (state.history[m].length >= 30) {
+          // After 30 ticks (5 mins) use oldest value as baseline
           state.prev24[m] = state.history[m][0];
         }
+
         state.history[m] = [...state.history[m].slice(-99), value];
       })
     );
@@ -66,7 +68,7 @@ function ensureTimer() {
   if (started || typeof window === "undefined") return;
   started = true;
   fetchPrices();
-  setInterval(fetchPrices, 10000); // ✅ was 24000
+  setInterval(fetchPrices, 10000);
 }
 
 export function useMarket(m: Market) {
