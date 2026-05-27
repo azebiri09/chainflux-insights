@@ -1,13 +1,4 @@
-import { useEffect, useRef } from "react";
-import {
-  createChart,
-  ColorType,
-  CrosshairMode,
-  type IChartApi,
-  type ISeriesApi,
-  type CandlestickData,
-  type LineData,
-} from "lightweight-charts";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 type Props = {
   data: number[];
@@ -15,147 +6,213 @@ type Props = {
   height?: number;
 };
 
-function toCandles(data: number[]): CandlestickData[] {
-  const out: CandlestickData[] = [];
+function toCandles(data: number[]) {
+  const out: { o: number; h: number; l: number; c: number }[] = [];
   const groupSize = 3;
-  const now = Math.floor(Date.now() / 1000);
-  const interval = 10;
-
   for (let i = 0; i < data.length; i += groupSize) {
     const group = data.slice(i, i + groupSize);
-    if (group.length < 1) continue;
-    const o = group[0];
-    const c = group[group.length - 1];
-    const h = Math.max(...group);
-    const l = Math.min(...group);
-    const time = (now - (data.length - i) * interval) as any;
-    out.push({ time, open: o, high: h, low: l, close: c });
+    if (!group.length) continue;
+    out.push({
+      o: group[0],
+      c: group[group.length - 1],
+      h: Math.max(...group),
+      l: Math.min(...group),
+    });
   }
   return out;
 }
 
-function toLine(data: number[]): LineData[] {
-  const now = Math.floor(Date.now() / 1000);
-  const interval = 10;
-  return data.map((v, i) => ({
-    time: (now - (data.length - i) * interval) as any,
-    value: v,
-  }));
-}
-
 export default function TradingChart({ data, type, height = 300 }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<any> | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [offset, setOffset] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const dragRef = useRef<{ startX: number; startOffset: number } | null>(null);
+  const lastTouchRef = useRef<{ dist: number; offset: number } | null>(null);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
+  const w = 800;
+  const padY = 20;
+  const padX = 10;
 
-    const chart = createChart(containerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "rgba(255,255,255,0.4)",
-      },
-      grid: {
-        vertLines: { color: "rgba(255,255,255,0.04)" },
-        horzLines: { color: "rgba(255,255,255,0.04)" },
-      },
-      crosshair: {
-        mode: CrosshairMode.Normal,
-      },
-      rightPriceScale: {
-        borderColor: "rgba(255,255,255,0.08)",
-        textColor: "rgba(255,255,255,0.4)",
-      },
-      timeScale: {
-        borderColor: "rgba(255,255,255,0.08)",
-        textColor: "rgba(255,255,255,0.4)",
-        timeVisible: true,
-        secondsVisible: false,
-        fixLeftEdge: false,
-        fixRightEdge: false,
-      },
-      handleScroll: {
-        mouseWheel: true,
-        pressedMouseMove: true,
-        horzTouchDrag: true,
-        vertTouchDrag: false,
-      },
-      handleScale: {
-        axisPressedMouseMove: true,
-        mouseWheel: true,
-        pinch: true,
-      },
-      width: containerRef.current.clientWidth,
-      height,
-    });
+  const visibleCount = Math.floor(30 * zoom);
 
-    chartRef.current = chart;
+  const allData = data.length >= 2 ? data : [
+    ...Array(20).fill(0).map((_, i) => {
+      const base = data[0] || 1;
+      return base * (0.95 + Math.sin(i * 0.5) * 0.05 + Math.random() * 0.02);
+    }),
+    ...(data.length ? data : []),
+  ];
 
-    if (type === "candle") {
-      const series = chart.addCandlestickSeries({
-        upColor: "#4ade80",
-        downColor: "#f87171",
-        borderUpColor: "#4ade80",
-        borderDownColor: "#f87171",
-        wickUpColor: "#4ade80",
-        wickDownColor: "#f87171",
-      });
-      const candles = toCandles(data);
-      if (candles.length) series.setData(candles);
-      seriesRef.current = series;
-    } else {
-      const up = data.length < 2 || data[data.length - 1] >= data[0];
-      const color = up ? "#4ade80" : "#f87171";
-      const series = chart.addAreaSeries({
-        lineColor: color,
-        topColor: up ? "rgba(74,222,128,0.15)" : "rgba(248,113,113,0.15)",
-        bottomColor: "transparent",
-        lineWidth: 2,
-      });
-      const lineData = toLine(data);
-      if (lineData.length) series.setData(lineData);
-      seriesRef.current = series;
+  const maxOffset = Math.max(0, allData.length - visibleCount);
+  const clampedOffset = Math.min(Math.max(0, offset), maxOffset);
+  const visible = allData.slice(
+    Math.max(0, allData.length - visibleCount - clampedOffset),
+    allData.length - clampedOffset || undefined
+  );
+
+  const min = Math.min(...visible) * 0.998;
+  const max = Math.max(...visible) * 1.002;
+  const range = max - min || 1;
+  const scaleY = (v: number) => padY + (1 - (v - min) / range) * (height - padY * 2);
+  const up = visible.length >= 2 && visible[visible.length - 1] >= visible[0];
+  const color = up ? "#4ade80" : "#f87171";
+
+  // Mouse drag
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    dragRef.current = { startX: e.clientX, startOffset: clampedOffset };
+  }, [clampedOffset]);
+
+  const onMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragRef.current) return;
+    const dx = dragRef.current.startX - e.clientX;
+    const newOffset = dragRef.current.startOffset + Math.round(dx / 20);
+    setOffset(Math.min(Math.max(0, newOffset), maxOffset));
+  }, [maxOffset]);
+
+  const onMouseUp = useCallback(() => { dragRef.current = null; }, []);
+
+  // Touch drag
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    e.stopPropagation();
+    if (e.touches.length === 1) {
+      dragRef.current = { startX: e.touches[0].clientX, startOffset: clampedOffset };
+    } else if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      lastTouchRef.current = { dist, offset: clampedOffset };
     }
+  }, [clampedOffset]);
 
-    chart.timeScale().fitContent();
-
-    const handleResize = () => {
-      if (containerRef.current) {
-        chart.applyOptions({ width: containerRef.current.clientWidth });
-      }
-    };
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      chart.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
-    };
-  }, [type, height]);
-
-  useEffect(() => {
-    if (!seriesRef.current || !data.length) return;
-
-    if (type === "candle") {
-      const candles = toCandles(data);
-      if (candles.length) seriesRef.current.setData(candles);
-    } else {
-      const lineData = toLine(data);
-      if (lineData.length) seriesRef.current.setData(lineData);
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    e.stopPropagation();
+    if (e.touches.length === 1 && dragRef.current) {
+      const dx = dragRef.current.startX - e.touches[0].clientX;
+      const newOffset = dragRef.current.startOffset + Math.round(dx / 15);
+      setOffset(Math.min(Math.max(0, newOffset), maxOffset));
+    } else if (e.touches.length === 2 && lastTouchRef.current) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const scale = lastTouchRef.current.dist / dist;
+      setZoom((z) => Math.min(Math.max(0.3, z * scale), 4));
+      lastTouchRef.current.dist = dist;
     }
+  }, [maxOffset]);
 
-    chartRef.current?.timeScale().fitContent();
-  }, [data, type]);
+  const onTouchEnd = useCallback(() => {
+    dragRef.current = null;
+    lastTouchRef.current = null;
+  }, []);
+
+  // Wheel zoom
+  const onWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    setZoom((z) => Math.min(Math.max(0.3, z + e.deltaY * 0.001)));
+  }, []);
+
+  if (type === "candle") {
+    const candles = toCandles(visible);
+    const slotW = (w - padX * 2) / Math.max(candles.length, 1);
+    const bodyW = Math.max(4, slotW * 0.6);
+
+    return (
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${w} ${height}`}
+        width="100%"
+        height={height}
+        preserveAspectRatio="none"
+        style={{ cursor: "grab", touchAction: "none" }}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onWheel={onWheel}
+      >
+        {[0.25, 0.5, 0.75].map((p) => (
+          <line
+            key={p}
+            x1={padX} x2={w - padX}
+            y1={padY + p * (height - padY * 2)}
+            y2={padY + p * (height - padY * 2)}
+            stroke="rgba(255,255,255,0.05)"
+            strokeWidth={1}
+            strokeDasharray="4 4"
+          />
+        ))}
+        {candles.map((c, i) => {
+          const up = c.c >= c.o;
+          const col = up ? "#4ade80" : "#f87171";
+          const cx = padX + i * slotW + slotW / 2;
+          const yH = scaleY(c.h);
+          const yL = scaleY(c.l);
+          const yO = scaleY(c.o);
+          const yC = scaleY(c.c);
+          const top = Math.min(yO, yC);
+          const bH = Math.max(2, Math.abs(yC - yO));
+          return (
+            <g key={i}>
+              <line x1={cx} x2={cx} y1={yH} y2={yL} stroke={col} strokeWidth={1.5} opacity={0.7} />
+              <rect x={cx - bodyW / 2} y={top} width={bodyW} height={bH} fill={col} rx={2} opacity={0.9} />
+            </g>
+          );
+        })}
+      </svg>
+    );
+  }
+
+  // Line chart
+  const scaleX = (i: number) => padX + (i / Math.max(visible.length - 1, 1)) * (w - padX * 2);
+  const points = visible.map((v, i) => `${scaleX(i)},${scaleY(v)}`).join(" ");
+  const area = [
+    `${scaleX(0)},${height}`,
+    ...visible.map((v, i) => `${scaleX(i)},${scaleY(v)}`),
+    `${scaleX(visible.length - 1)},${height}`,
+  ].join(" ");
 
   return (
-    <div
-      ref={containerRef}
-      style={{ height }}
-      className="w-full"
-      // Prevent page scroll interfering with chart touch
-      onTouchStart={(e) => e.stopPropagation()}
-    />
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${w} ${height}`}
+      width="100%"
+      height={height}
+      preserveAspectRatio="none"
+      style={{ cursor: "grab", touchAction: "none" }}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onWheel={onWheel}
+    >
+      <defs>
+        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[0.25, 0.5, 0.75].map((p) => (
+        <line
+          key={p}
+          x1={padX} x2={w - padX}
+          y1={padY + p * (height - padY * 2)}
+          y2={padY + p * (height - padY * 2)}
+          stroke="rgba(255,255,255,0.05)"
+          strokeWidth={1}
+          strokeDasharray="4 4"
+        />
+      ))}
+      <polygon points={area} fill="url(#areaGrad)" />
+      <polyline points={points} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={scaleX(visible.length - 1)} cy={scaleY(visible[visible.length - 1])} r={4} fill={color} />
+    </svg>
   );
-}
+      }
