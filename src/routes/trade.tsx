@@ -17,7 +17,7 @@ const MARKETS: Market[] = ["GAS", "ACTIVITY", "FLOW"];
 function TradePage() {
   const [market, setMarket] = useState<Market>("GAS");
   const [dir, setDir] = useState<"LONG" | "SHORT">("LONG");
-  const [size, setSize] = useState<string>("1");
+  const [size, setSize] = useState<string>("0.01");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -33,7 +33,7 @@ function TradePage() {
     setError(null);
     setTxHash(null);
     try {
-      await openPosition(market, dir === "LONG", sizeNum);
+      await openPosition(market, dir, sizeNum); // ✅ pass dir directly, not boolean
       setTxHash("Position opened successfully!");
     } catch (e: any) {
       setError(e?.message || "Transaction failed");
@@ -141,14 +141,14 @@ function TradePage() {
             </div>
 
             <label className="block mt-7 text-[10px] tracking-[0.3em] text-white/50 uppercase">
-              Size
+              Collateral (ETH)
             </label>
             <input
               value={size}
               onChange={(e) => setSize(e.target.value)}
               type="number"
-              min="0"
-              step="0.1"
+              min="0.001"
+              step="0.001"
               className="mt-2 w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-lg tabular-nums focus:outline-none focus:border-white/30"
             />
 
@@ -159,7 +159,7 @@ function TradePage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-white/50">Entry Price</span>
-                <span className="text-white tabular-nums">{m.current.toFixed(2)}</span>
+                <span className="text-white tabular-nums">{m.current.toFixed(4)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-white/50">Direction</span>
@@ -169,10 +169,14 @@ function TradePage() {
                 <span className="text-white/50">Fee (0.3%)</span>
                 <span className="text-white tabular-nums">{(sizeNum * 0.003).toFixed(4)} ETH</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-white/50">Min collateral</span>
+                <span className="text-white/50">0.001 ETH</span>
+              </div>
             </div>
 
             <button
-              disabled={!wallet || loading}
+              disabled={!wallet || loading || sizeNum < 0.001}
               onClick={onOpen}
               className="mt-7 w-full py-4 rounded-xl bg-white text-[oklch(0.12_0.03_260)] text-sm font-semibold tracking-wide hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
@@ -232,7 +236,7 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
           <tr>
             <th className="text-left px-6 py-4">Market</th>
             <th className="text-left px-6 py-4">Direction</th>
-            <th className="text-right px-6 py-4">Size</th>
+            <th className="text-right px-6 py-4">Collateral</th>
             <th className="text-right px-6 py-4">Entry</th>
             <th className="text-right px-6 py-4">Current</th>
             <th className="text-right px-6 py-4">PnL</th>
@@ -249,11 +253,15 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
                 <td className={`px-6 py-4 ${p.direction === "LONG" ? "text-emerald-300" : "text-red-300"}`}>
                   {p.direction}
                 </td>
-                <td className="px-6 py-4 text-right text-white tabular-nums">{p.size}</td>
-                <td className="px-6 py-4 text-right text-white/80 tabular-nums">{p.entry.toFixed(2)}</td>
-                <td className="px-6 py-4 text-right text-white tabular-nums">{cur.toFixed(2)}</td>
+                <td className="px-6 py-4 text-right text-white tabular-nums">
+                  {p.collateral.toFixed(4)} ETH {/* ✅ was p.size */}
+                </td>
+                <td className="px-6 py-4 text-right text-white/80 tabular-nums">
+                  {p.entryPrice.toFixed(4)} {/* ✅ was p.entry */}
+                </td>
+                <td className="px-6 py-4 text-right text-white tabular-nums">{cur.toFixed(4)}</td>
                 <td className={`px-6 py-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>
-                  {v.toFixed(2)}
+                  {v.toFixed(4)} ETH
                 </td>
                 <td className="px-6 py-4 text-right">
                   <button
@@ -271,4 +279,4 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
       </table>
     </div>
   );
-}
+  }
