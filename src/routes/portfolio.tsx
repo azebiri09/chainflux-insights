@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import Layout from "@/components/Layout";
+import { MARKET_LABELS } from "@/lib/markets";
 import { useMarket } from "@/lib/markets";
 import { closePosition, pnl, usePositions } from "@/lib/positions";
 import type { Market } from "@/lib/positions";
@@ -12,11 +13,12 @@ export const Route = createFileRoute("/portfolio")({
 
 function PortfolioPage() {
   const wallet = useWallet();
-  const { open, hist } = usePositions();
+  const { open, hist } = usePositions(wallet);
   const gas = useMarket("GAS");
-  const act = useMarket("ACTIVITY");
-  const fl = useMarket("FLOW");
-  const price = (m: Market) => (m === "GAS" ? gas.current : m === "ACTIVITY" ? act.current : fl.current);
+  const aave = useMarket("AAVE_BORROWS");
+  const txs = useMarket("TXS_PER_BLOCK");
+  const price = (m: Market) =>
+    m === "GAS" ? gas.current : m === "AAVE_BORROWS" ? aave.current : txs.current;
 
   return (
     <Layout>
@@ -49,8 +51,10 @@ function PortfolioPage() {
                   <tr>
                     <th className="text-left p-4">Market</th>
                     <th className="text-left p-4">Direction</th>
-                    <th className="text-right p-4">Size</th>
+                    <th className="text-left p-4">Leverage</th>
+                    <th className="text-right p-4">Collateral</th>
                     <th className="text-right p-4">Entry</th>
+                    <th className="text-right p-4">Liq. Price</th>
                     <th className="text-right p-4">Current</th>
                     <th className="text-right p-4">PnL</th>
                     <th className="text-right p-4"></th>
@@ -60,14 +64,20 @@ function PortfolioPage() {
                   {open.map((p, i) => {
                     const cur = price(p.market);
                     const v = pnl(p, cur);
+                    const moveToLiq = 0.8 / p.leverage;
+                    const liqPrice = p.direction === "LONG"
+                      ? p.entryPrice * (1 - moveToLiq)
+                      : p.entryPrice * (1 + moveToLiq);
                     return (
                       <tr key={p.id} className={i % 2 ? "bg-white/[0.02]" : ""}>
-                        <td className="p-4 text-white">{p.market}</td>
+                        <td className="p-4 text-white">{MARKET_LABELS[p.market]}</td>
                         <td className={`p-4 ${p.direction === "LONG" ? "text-emerald-300" : "text-red-300"}`}>{p.direction}</td>
-                        <td className="p-4 text-right text-white tabular-nums">{p.size}</td>
-                        <td className="p-4 text-right text-white/80 tabular-nums">{p.entry.toFixed(2)}</td>
-                        <td className="p-4 text-right text-white tabular-nums">{cur.toFixed(2)}</td>
-                        <td className={`p-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>{v.toFixed(2)}</td>
+                        <td className="p-4 text-white/70">{p.leverage}×</td>
+                        <td className="p-4 text-right text-white tabular-nums">{p.collateral.toFixed(4)} ETH</td>
+                        <td className="p-4 text-right text-white/80 tabular-nums">{p.entryPrice.toFixed(4)}</td>
+                        <td className="p-4 text-right text-red-300 tabular-nums">{liqPrice.toFixed(4)}</td>
+                        <td className="p-4 text-right text-white tabular-nums">{cur.toFixed(4)}</td>
+                        <td className={`p-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>{v.toFixed(4)} ETH</td>
                         <td className="p-4 text-right">
                           <button onClick={() => closePosition(p.id, cur)} className="px-3 py-1 rounded-md bg-white/5 hover:bg-white/10 text-white text-xs border border-white/10">
                             Close
@@ -94,7 +104,8 @@ function PortfolioPage() {
                   <tr>
                     <th className="text-left p-4">Market</th>
                     <th className="text-left p-4">Direction</th>
-                    <th className="text-right p-4">Size</th>
+                    <th className="text-left p-4">Leverage</th>
+                    <th className="text-right p-4">Collateral</th>
                     <th className="text-right p-4">Entry</th>
                     <th className="text-right p-4">Close</th>
                     <th className="text-right p-4">PnL</th>
@@ -103,15 +114,16 @@ function PortfolioPage() {
                 </thead>
                 <tbody>
                   {hist.map((p, i) => {
-                    const v = pnl(p, p.close ?? p.entry);
+                    const v = pnl(p, p.closePrice ?? p.entryPrice);
                     return (
                       <tr key={p.id} className={i % 2 ? "bg-white/[0.02]" : ""}>
-                        <td className="p-4 text-white">{p.market}</td>
+                        <td className="p-4 text-white">{MARKET_LABELS[p.market]}</td>
                         <td className={`p-4 ${p.direction === "LONG" ? "text-emerald-300" : "text-red-300"}`}>{p.direction}</td>
-                        <td className="p-4 text-right text-white tabular-nums">{p.size}</td>
-                        <td className="p-4 text-right text-white/80 tabular-nums">{p.entry.toFixed(2)}</td>
-                        <td className="p-4 text-right text-white/80 tabular-nums">{(p.close ?? 0).toFixed(2)}</td>
-                        <td className={`p-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>{v.toFixed(2)}</td>
+                        <td className="p-4 text-white/70">{p.leverage}×</td>
+                        <td className="p-4 text-right text-white tabular-nums">{p.collateral.toFixed(4)} ETH</td>
+                        <td className="p-4 text-right text-white/80 tabular-nums">{p.entryPrice.toFixed(4)}</td>
+                        <td className="p-4 text-right text-white/80 tabular-nums">{(p.closePrice ?? 0).toFixed(4)}</td>
+                        <td className={`p-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>{v.toFixed(4)} ETH</td>
                         <td className="p-4 text-right text-white/60">{p.closedAt ? new Date(p.closedAt).toLocaleString() : ""}</td>
                       </tr>
                     );
@@ -124,4 +136,4 @@ function PortfolioPage() {
       </div>
     </Layout>
   );
-}
+        }
