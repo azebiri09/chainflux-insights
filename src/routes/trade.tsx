@@ -213,7 +213,22 @@ function TradePage() {
                 className="mt-4 rounded-xl overflow-hidden"
                 style={{ touchAction: "none" }}
               >
-                <TradingChart data={visibleData} type={chartType} height={300} />
+                <TradingChart
+  data={visibleData}
+  type={chartType}
+  height={300}
+  entryPrice={open.find(p => p.market === market)?.entryPrice}
+  liquidationPrice={open.find(p => p.market === market) 
+    ? (() => {
+        const pos = open.find(p => p.market === market)!;
+        const moveToLiq = 0.8 / pos.leverage;
+        return pos.direction === "LONG"
+          ? pos.entryPrice * (1 - moveToLiq)
+          : pos.entryPrice * (1 + moveToLiq);
+      })()
+    : liquidationPrice ?? undefined}
+  direction={open.find(p => p.market === market)?.direction ?? dir}
+ />
               </div>
             </div>
           </div>
