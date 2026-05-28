@@ -11,14 +11,20 @@ const ABI = [
 
 const MARKET_INDEX: Record<Market, number> = {
   GAS: 0,
-  ACTIVITY: 1,
-  FLOW: 2
+  AAVE_BORROWS: 1,
+  TXS_PER_BLOCK: 2,
+};
+
+export const MARKET_LABELS: Record<Market, string> = {
+  GAS: "GAS",
+  AAVE_BORROWS: "AAVE BORROWS",
+  TXS_PER_BLOCK: "TXS PER BLOCK",
 };
 
 export const MARKET_UNITS: Record<Market, string> = {
   GAS: "gwei",
-  ACTIVITY: "tx/s",
-  FLOW: "ETH/min"
+  AAVE_BORROWS: "USD",
+  TXS_PER_BLOCK: "txs",
 };
 
 type State = {
@@ -27,8 +33,8 @@ type State = {
 };
 
 const state: State = {
-  history: { GAS: [], ACTIVITY: [], FLOW: [] },
-  prev24: { GAS: 0, ACTIVITY: 0, FLOW: 0 },
+  history: { GAS: [], AAVE_BORROWS: [], TXS_PER_BLOCK: [] },
+  prev24: { GAS: 0, AAVE_BORROWS: 0, TXS_PER_BLOCK: 0 },
 };
 
 const listeners = new Set<() => void>();
@@ -39,7 +45,7 @@ async function fetchPrices() {
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const contract = new ethers.Contract(PROXY_ADDRESS, ABI, provider);
 
-    const markets: Market[] = ["GAS", "ACTIVITY", "FLOW"];
+    const markets: Market[] = ["GAS", "AAVE_BORROWS", "TXS_PER_BLOCK"];
 
     await Promise.all(
       markets.map(async (m) => {
@@ -47,10 +53,8 @@ async function fetchPrices() {
         const value = Number(result.price) / 1e18;
 
         if (state.history[m].length === 0) {
-          // First load — lock this as baseline
           state.prev24[m] = value;
         } else if (state.history[m].length >= 30) {
-          // After 30 ticks (5 mins) use oldest value as baseline
           state.prev24[m] = state.history[m][0];
         }
 
@@ -89,12 +93,12 @@ export function useMarket(m: Market) {
 
 export function useAllMarkets() {
   const gas = useMarket("GAS");
-  const activity = useMarket("ACTIVITY");
-  const flow = useMarket("FLOW");
-  return { GAS: gas, ACTIVITY: activity, FLOW: flow };
+  const aaveBorrows = useMarket("AAVE_BORROWS");
+  const txsPerBlock = useMarket("TXS_PER_BLOCK");
+  return { GAS: gas, AAVE_BORROWS: aaveBorrows, TXS_PER_BLOCK: txsPerBlock };
 }
 
 export function getCurrent(m: Market) {
   const h = state.history[m];
   return h[h.length - 1] ?? 0;
-  }
+}
