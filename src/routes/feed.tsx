@@ -1,25 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import Layout from "@/components/Layout";
 import Sparkline from "@/components/Sparkline";
-import { MARKET_UNITS, useAllMarkets } from "@/lib/markets";
+import { MARKET_LABELS, MARKET_UNITS, useAllMarkets } from "@/lib/markets";
 
 export const Route = createFileRoute("/feed")({
   component: FeedPage,
   head: () => ({ meta: [{ title: "Network Feed — ChainFlux" }] }),
 });
 
-const COPY: Record<"GAS" | "ACTIVITY" | "FLOW", { title: string; body: string }> = {
+const COPY: Record<"GAS" | "AAVE_BORROWS" | "TXS_PER_BLOCK", { title: string; body: string }> = {
   GAS: {
     title: "Network Congestion",
     body: "Arbitrum's base fee moves with demand. When the network gets busy, gas spikes. Trade the direction before it moves.",
   },
-  ACTIVITY: {
-    title: "Transaction Volume",
-    body: "Every transaction is a signal. Rising activity means the network is being used. Falling means it's cooling off. You decide which way it goes.",
+  AAVE_BORROWS: {
+    title: "Aave Borrow Volume",
+    body: "Total USD borrowed on Aave is a direct signal of DeFi leverage appetite. Rising borrows means risk-on. Falling means capital is pulling back.",
   },
-  FLOW: {
-    title: "ETH Movement on Arbitrum",
-    body: "Capital moves before prices do. Track live ETH flowing in and out of Arbitrum and trade the momentum.",
+  TXS_PER_BLOCK: {
+    title: "Transactions Per Block",
+    body: "Every block tells a story. High tx density means the network is being pushed. Low means quiet. Trade the rhythm of the chain.",
   },
 };
 
@@ -29,7 +29,7 @@ function FeedCard({
   history,
   size = "wide",
 }: {
-  k: "GAS" | "ACTIVITY" | "FLOW";
+  k: "GAS" | "AAVE_BORROWS" | "TXS_PER_BLOCK";
   current: number;
   history: number[];
   size?: "wide" | "tall" | "full";
@@ -38,7 +38,7 @@ function FeedCard({
     <div className="glass rounded-2xl p-7 sm:p-9 flex flex-col h-full">
       <div className="flex items-start justify-between gap-6 flex-wrap">
         <div>
-          <div className="text-[10px] tracking-[0.3em] text-primary/80 uppercase">{k}</div>
+          <div className="text-[10px] tracking-[0.3em] text-primary/80 uppercase">{MARKET_LABELS[k]}</div>
           <h3 className="mt-2 text-2xl sm:text-3xl text-white font-semibold tracking-tight">
             {COPY[k].title}
           </h3>
@@ -73,25 +73,23 @@ function FeedPage() {
             The heartbeat, in real time.
           </h1>
           <p className="mt-6 text-white/60 text-lg leading-relaxed">
-            A live market for Arbitrum activity. Track GAS, ACTIVITY, and FLOW as the chain moves
-            in real time.
+            A live market for Arbitrum activity. Track GAS, AAVE BORROWS, and TXS PER BLOCK as the chain moves in real time.
           </p>
         </div>
 
-        {/* Varied layout: hero card + two stacked, then full-width */}
         <div className="mt-16 grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <FeedCard k="GAS" current={all.GAS.current} history={all.GAS.history} size="tall" />
           </div>
           <div className="lg:pt-10">
-            <FeedCard k="ACTIVITY" current={all.ACTIVITY.current} history={all.ACTIVITY.history} />
+            <FeedCard k="AAVE_BORROWS" current={all.AAVE_BORROWS.current} history={all.AAVE_BORROWS.history} />
           </div>
         </div>
 
         <div className="mt-10 sm:mt-14">
-          <FeedCard k="FLOW" current={all.FLOW.current} history={all.FLOW.history} size="full" />
+          <FeedCard k="TXS_PER_BLOCK" current={all.TXS_PER_BLOCK.current} history={all.TXS_PER_BLOCK.history} size="full" />
         </div>
       </div>
     </Layout>
   );
-}
+            }
