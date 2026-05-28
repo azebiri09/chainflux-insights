@@ -50,7 +50,7 @@ async function fetchPrices() {
     await Promise.all(
       markets.map(async (m) => {
         const result = await contract.getMarket(MARKET_INDEX[m]);
-        const value = Number(result.price) / 1e18;
+        const value = parseFloat(ethers.formatUnits(result.price, 18));
 
         if (state.history[m].length === 0) {
           state.prev24[m] = value;
@@ -101,4 +101,4 @@ export function useAllMarkets() {
 export function getCurrent(m: Market) {
   const h = state.history[m];
   return h[h.length - 1] ?? 0;
-}
+    }
