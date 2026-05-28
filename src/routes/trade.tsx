@@ -12,20 +12,27 @@ export const Route = createFileRoute("/trade")({
   head: () => ({ meta: [{ title: "Trade — ChainFlux" }] }),
 });
 
-const MARKETS: Market[] = ["GAS", "ACTIVITY", "FLOW"];
+const MARKETS: Market[] = ["GAS", "AAVE_BORROWS", "TXS_PER_BLOCK"];
 const TIMEFRAMES = ["1m", "5m", "15m", "1h"] as const;
 type Timeframe = typeof TIMEFRAMES[number];
 const TIMEFRAME_TICKS: Record<Timeframe, number> = {
-  "1m": 6,    // 6 ticks × 10s = 1 minute
-  "5m": 30,   // 30 ticks × 10s = 5 minutes
-  "15m": 90,  // 90 ticks × 10s = 15 minutes
-  "1h": 360,  // 360 ticks × 10s = 1 hour
+  "1m": 6,
+  "5m": 30,
+  "15m": 90,
+  "1h": 360,
+};
+
+const MARKET_DISPLAY: Record<Market, string> = {
+  GAS: "GAS",
+  AAVE_BORROWS: "AAVE BORROWS",
+  TXS_PER_BLOCK: "TXS PER BLOCK",
 };
 
 function TradePage() {
   const [market, setMarket] = useState<Market>("GAS");
   const [dir, setDir] = useState<"LONG" | "SHORT">("LONG");
   const [size, setSize] = useState<string>("0.01");
+  const [leverage, setLeverage] = useState<2 | 5>(2);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -38,6 +45,14 @@ function TradePage() {
   const { open } = usePositions(wallet);
 
   const sizeNum = Number(size) || 0;
+
+  // Liquidation price — 80% of margin lost
+  const liquidationPrice = useMemo(() => {
+    if (!m.current) return null;
+    const moveToLiq = 0.8 / leverage;
+    if (dir === "LONG") return m.current * (1 - moveToLiq);
+    return m.current * (1 + moveToLiq);
+  }, [m.current, dir, leverage]);
 
   const visibleData = useMemo(() => {
     const ticks = Math.floor(TIMEFRAME_TICKS[timeframe] / zoom);
@@ -57,7 +72,7 @@ function TradePage() {
     setError(null);
     setTxHash(null);
     try {
-      await openPosition(market, dir, sizeNum);
+      await openPosition(market, dir, sizeNum, leverage);
       setTxHash("Position opened successfully!");
     } catch (e: any) {
       setError(e?.message || "Transaction failed");
@@ -110,7 +125,7 @@ function TradePage() {
                         : "border-white/10 text-white/60 hover:text-white hover:border-white/20"
                     }`}
                   >
-                    {mm}
+                    {MARKET_DISPLAY[mm]}
                   </button>
                 ))}
               </div>
@@ -194,20 +209,20 @@ function TradePage() {
                 </div>
               </div>
 
-              {/* Chart — touch action none prevents page scroll */}
               <div
                 className="mt-4 rounded-xl overflow-hidden"
                 style={{ touchAction: "none" }}
               >
                 <TradingChart data={visibleData} type={chartType} height={300} />
               </div>
-
             </div>
           </div>
 
           {/* Position builder */}
           <div className="glass rounded-2xl p-6 sm:p-7">
             <div className="text-[10px] tracking-[0.3em] text-white/50 uppercase">Open Position</div>
+
+            {/* Long / Short */}
             <div className="mt-5 grid grid-cols-2 gap-3">
               <button
                 onClick={() => setDir("LONG")}
@@ -233,6 +248,27 @@ function TradePage() {
               </button>
             </div>
 
+            {/* Leverage selector */}
+            <label className="block mt-7 text-[10px] tracking-[0.3em] text-white/50 uppercase">
+              Leverage
+            </label>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              {([2, 5] as const).map((lv) => (
+                <button
+                  key={lv}
+                  onClick={() => setLeverage(lv)}
+                  className={`py-3 rounded-xl text-sm font-semibold tracking-wide transition-all border ${
+                    leverage === lv
+                      ? "bg-white/10 border-white/30 text-white"
+                      : "border-white/10 text-white/50 hover:text-white hover:border-white/20"
+                  }`}
+                >
+                  {lv}×
+                </button>
+              ))}
+            </div>
+
+            {/* Collateral */}
             <label className="block mt-7 text-[10px] tracking-[0.3em] text-white/50 uppercase">
               Collateral (ETH)
             </label>
@@ -245,10 +281,11 @@ function TradePage() {
               className="mt-2 w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-lg tabular-nums focus:outline-none focus:border-white/30"
             />
 
+            {/* Position details */}
             <div className="mt-6 space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-white/50">Market</span>
-                <span className="text-white">{market}</span>
+                <span className="text-white">{MARKET_DISPLAY[market]}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-white/50">Entry Price</span>
@@ -257,6 +294,16 @@ function TradePage() {
               <div className="flex justify-between">
                 <span className="text-white/50">Direction</span>
                 <span className={dir === "LONG" ? "text-emerald-300" : "text-red-300"}>{dir}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/50">Leverage</span>
+                <span className="text-white">{leverage}×</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/50">Liquidation Price</span>
+                <span className="text-red-300 tabular-nums">
+                  {liquidationPrice ? liquidationPrice.toFixed(4) : "—"}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-white/50">Fee (0.3%)</span>
@@ -273,7 +320,7 @@ function TradePage() {
               onClick={onOpen}
               className="mt-7 w-full py-4 rounded-xl bg-white text-[oklch(0.12_0.03_260)] text-sm font-semibold tracking-wide hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? "Confirming..." : wallet ? `Open ${dir}` : "Connect Wallet"}
+              {loading ? "Confirming..." : wallet ? `Open ${dir} ${leverage}×` : "Connect Wallet"}
             </button>
             {wallet && (
               <p className="mt-4 text-[11px] text-white/40 font-mono text-center">
@@ -298,10 +345,10 @@ function TradePage() {
 function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"] }) {
   const [closing, setClosing] = useState<string | null>(null);
   const gas = useMarket("GAS");
-  const act = useMarket("ACTIVITY");
-  const fl = useMarket("FLOW");
+  const aave = useMarket("AAVE_BORROWS");
+  const txs = useMarket("TXS_PER_BLOCK");
   const price = (m: Market) =>
-    m === "GAS" ? gas.current : m === "ACTIVITY" ? act.current : fl.current;
+    m === "GAS" ? gas.current : m === "AAVE_BORROWS" ? aave.current : txs.current;
 
   const onClose = async (id: string, cur: number) => {
     setClosing(id);
@@ -329,8 +376,10 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
           <tr>
             <th className="text-left px-6 py-4">Market</th>
             <th className="text-left px-6 py-4">Direction</th>
+            <th className="text-left px-6 py-4">Leverage</th>
             <th className="text-right px-6 py-4">Collateral</th>
             <th className="text-right px-6 py-4">Entry</th>
+            <th className="text-right px-6 py-4">Liq. Price</th>
             <th className="text-right px-6 py-4">Current</th>
             <th className="text-right px-6 py-4">PnL</th>
             <th className="text-right px-6 py-4"></th>
@@ -340,17 +389,25 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
           {open.map((p) => {
             const cur = price(p.market);
             const v = pnl(p, cur);
+            const moveToLiq = 0.8 / p.leverage;
+            const liqPrice = p.direction === "LONG"
+              ? p.entryPrice * (1 - moveToLiq)
+              : p.entryPrice * (1 + moveToLiq);
             return (
               <tr key={p.id} className="border-t border-white/5">
-                <td className="px-6 py-4 text-white">{p.market}</td>
+                <td className="px-6 py-4 text-white">{MARKET_DISPLAY[p.market]}</td>
                 <td className={`px-6 py-4 ${p.direction === "LONG" ? "text-emerald-300" : "text-red-300"}`}>
                   {p.direction}
                 </td>
+                <td className="px-6 py-4 text-white/70">{p.leverage}×</td>
                 <td className="px-6 py-4 text-right text-white tabular-nums">
                   {p.collateral.toFixed(4)} ETH
                 </td>
                 <td className="px-6 py-4 text-right text-white/80 tabular-nums">
                   {p.entryPrice.toFixed(4)}
+                </td>
+                <td className="px-6 py-4 text-right text-red-300 tabular-nums">
+                  {liqPrice.toFixed(4)}
                 </td>
                 <td className="px-6 py-4 text-right text-white tabular-nums">{cur.toFixed(4)}</td>
                 <td className={`px-6 py-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>
@@ -372,4 +429,4 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
       </table>
     </div>
   );
-                             }
+  }
