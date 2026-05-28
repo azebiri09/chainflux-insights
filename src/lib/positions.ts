@@ -6,6 +6,7 @@ export type Position = {
   id: string;
   market: Market;
   direction: "LONG" | "SHORT";
+  leverage: 2 | 5;
   collateral: number;
   entryPrice: number;
   openedAt: number;
@@ -16,7 +17,7 @@ export type Position = {
 const PROXY_ADDRESS = "0x615d3801019D33609Eed27EB39D40AB49fa44fAF";
 
 const ABI = [
-  "function openPosition(uint8 market, uint8 direction) external payable",
+  "function openPosition(uint8 market, uint8 direction, uint8 leverage) external payable",
   "function closePosition(uint256 id) external",
   "function getPosition(uint256 id) external view returns (address trader, uint8 market, uint8 direction, uint256 collateral, uint256 size, uint256 entryPrice, uint256 openedAt, uint256 cftMinted, bool open)",
   "function getUserPositions(address user) external view returns (uint256[])",
@@ -44,7 +45,8 @@ function writeHist(v: Position[]) {
 export async function openPosition(
   market: Market,
   direction: "LONG" | "SHORT",
-  collateralEth: number
+  collateralEth: number,
+  leverage: 2 | 5
 ): Promise<void> {
   if (!window.ethereum) throw new Error("No wallet");
   const provider = new ethers.BrowserProvider(window.ethereum);
@@ -55,7 +57,7 @@ export async function openPosition(
   const directionIndex = direction === "LONG" ? 0 : 1;
   const value = ethers.parseEther(collateralEth.toFixed(6));
 
-  const tx = await contract.openPosition(marketIndex, directionIndex, { value });
+  const tx = await contract.openPosition(marketIndex, directionIndex, leverage, { value });
   await tx.wait();
   await refreshPositions(await signer.getAddress());
 }
@@ -98,6 +100,7 @@ export async function refreshPositions(address: string): Promise<void> {
             id: id.toString(),
             market: INDEX_MARKET[Number(p.market)],
             direction: Number(p.direction) === 0 ? "LONG" : "SHORT",
+            leverage: (Number(p.leverage) === 5 ? 5 : 2) as 2 | 5,
             collateral: Number(ethers.formatEther(p.collateral)),
             entryPrice: Number(p.entryPrice) / 1e18,
             openedAt: Number(p.openedAt) * 1000,
@@ -136,5 +139,5 @@ export function pnl(p: Position, currentPrice: number): number {
   const diff = p.direction === "LONG"
     ? currentPrice - p.entryPrice
     : p.entryPrice - currentPrice;
-  return (diff / p.entryPrice) * p.collateral;
-}
+  return (diff / p.entryPrice) * p.collateral * p.leverage;
+  }
