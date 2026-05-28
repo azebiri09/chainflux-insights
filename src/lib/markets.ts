@@ -3,7 +3,7 @@ import { ethers } from "ethers";
 import type { Market } from "./positions";
 
 const PROXY_ADDRESS = "0x615d3801019D33609Eed27EB39D40AB49fa44fAF";
-const RPC_URL = "https://sepolia-rollup.arbitrum.io/rpc";
+const RPC_URL = "https://arb-sepolia.g.alchemy.com/v2/2j_6XWOd20pBfZaWfVYjI";
 
 const ABI = [
   "function getMarket(uint8 m) external view returns (uint256 price, uint256 updatedAt, uint256 longOI, uint256 shortOI)"
@@ -101,4 +101,4 @@ export function useAllMarkets() {
 export function getCurrent(m: Market) {
   const h = state.history[m];
   return h[h.length - 1] ?? 0;
-    }
+          }
