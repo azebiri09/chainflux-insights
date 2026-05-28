@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 
-export type Market = "GAS" | "ACTIVITY" | "FLOW";
+export type Market = "GAS" | "AAVE_BORROWS" | "TXS_PER_BLOCK";
 export type Position = {
   id: string;
   market: Market;
@@ -24,8 +24,8 @@ const ABI = [
   "function getMarket(uint8 m) external view returns (uint256 price, uint256 updatedAt, uint256 longOI, uint256 shortOI)"
 ];
 
-const MARKET_INDEX: Record<Market, number> = { GAS: 0, ACTIVITY: 1, FLOW: 2 };
-const INDEX_MARKET: Record<number, Market> = { 0: "GAS", 1: "ACTIVITY", 2: "FLOW" };
+const MARKET_INDEX: Record<Market, number> = { GAS: 0, AAVE_BORROWS: 1, TXS_PER_BLOCK: 2 };
+const INDEX_MARKET: Record<number, Market> = { 0: "GAS", 1: "AAVE_BORROWS", 2: "TXS_PER_BLOCK" };
 
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
@@ -140,4 +140,4 @@ export function pnl(p: Position, currentPrice: number): number {
     ? currentPrice - p.entryPrice
     : p.entryPrice - currentPrice;
   return (diff / p.entryPrice) * p.collateral * p.leverage;
-  }
+}
