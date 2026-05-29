@@ -30,7 +30,7 @@ let started = false;
 
 async function fetchPrices() {
   try {
-    const res = await fetch(KEEPER_API);
+    const res = await fetch(KEEPER_API, { cache: "no-store" });
     const data = await res.json() as {
       GAS: number;
       AAVE_BORROWS: number;
@@ -45,11 +45,13 @@ async function fetchPrices() {
 
       if (state.history[m].length === 0) {
         state.prev24[m] = value;
-      } else if (state.history[m].length >= 30) {
+      } else if (state.history[m].length >= 1080) {
+        // ~1hr of history at 3s intervals = 1200 ticks; use oldest as 24h ref
         state.prev24[m] = state.history[m][0];
       }
 
-      state.history[m] = [...state.history[m].slice(-99), value];
+      // Keep up to 1200 ticks (~1hr at 3s polling)
+      state.history[m] = [...state.history[m].slice(-1199), value];
     }
 
     listeners.forEach((l) => l());
@@ -62,7 +64,7 @@ function ensureTimer() {
   if (started || typeof window === "undefined") return;
   started = true;
   fetchPrices();
-  setInterval(fetchPrices, 10000);
+  setInterval(fetchPrices, 3000);
 }
 
 export function useMarket(m: Market) {
@@ -91,4 +93,4 @@ export function useAllMarkets() {
 export function getCurrent(m: Market) {
   const h = state.history[m];
   return h[h.length - 1] ?? 0;
-      }
+    }
