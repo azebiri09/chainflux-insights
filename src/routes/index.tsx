@@ -16,7 +16,7 @@ export const Route = createFileRoute("/")({
 
 const markets = [
   { code: "GAS", name: "Network Congestion", desc: "Trade Arbitrum gas in real time.", sub: "As network activity rises, fees react instantly." },
-  { code: "AAVE_BORROWS", name: "AAVE Borrow Demand", desc: "Trade the pace of capital borrowing on AAVE.", sub: "Follow borrow volume as DeFi demand accelerates or slows down." },
+  { code: "ACTIVE_ADDRESSES", name: "Active Addresses", desc: "Trade the number of unique addresses active per block.", sub: "Follow participation as network activity accelerates or slows down." },
   { code: "TXS_PER_BLOCK", name: "Transactions Per Block", desc: "Track onchain throughput across Arbitrum.", sub: "Trade live transaction density as the network heats up or cools down." },
 ] as const;
 
@@ -105,7 +105,7 @@ function Index() {
           <p>
             Instead of betting on whether a token goes up or down, you trade the network itself.
             When Arbitrum heats up, gas climbs. When users come back, transactions per block rises.
-            When DeFi demand surges, AAVE borrows follow. Every one of those moments is now tradable.
+            When participation surges, active addresses follow. Every one of those moments is now tradable.
           </p>
         </div>
       </section>
@@ -155,10 +155,10 @@ function Index() {
       <section className="mx-auto max-w-7xl px-6 py-28">
         <h2 className="text-4xl sm:text-5xl font-semibold text-white tracking-tight">Network Feed</h2>
         <p className="mt-5 text-white/60 max-w-2xl text-lg leading-relaxed">
-          A live market for Arbitrum activity. Track GAS, AAVE BORROWS, and TXS PER BLOCK as the chain moves in real time.
+          A live market for Arbitrum activity. Track GAS, ACTIVE ADDRESSES, and TXS PER BLOCK as the chain moves in real time.
         </p>
         <div className="mt-12 grid gap-6 md:grid-cols-3">
-          {(["GAS", "AAVE_BORROWS", "TXS_PER_BLOCK"] as const).map((k) => (
+          {(["GAS", "ACTIVE_ADDRESSES", "TXS_PER_BLOCK"] as const).map((k) => (
             <div key={k} className="glass rounded-2xl p-6">
               <div className="flex items-baseline justify-between">
                 <div className="text-[10px] tracking-[0.3em] text-white/50 uppercase">{k.replace(/_/g, " ")}</div>
@@ -217,4 +217,4 @@ function Index() {
       </section>
     </Layout>
   );
-      }
+            }
