@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import Sparkline from "@/components/Sparkline";
 import { MARKET_LABELS, MARKET_UNITS, useAllMarkets } from "@/lib/markets";
@@ -65,19 +64,6 @@ function FeedCard({
 
 function FeedPage() {
   const all = useAllMarkets();
-  const [debugMsg, setDebugMsg] = useState("Waiting for first fetch...");
-
-  useEffect(() => {
-    const check = setInterval(() => {
-      const gas = all.GAS.current;
-      const borrows = all.AAVE_BORROWS.current;
-      const txs = all.TXS_PER_BLOCK.current;
-      const histLen = all.GAS.history.length;
-      setDebugMsg(`GAS: ${gas} | BORROWS: ${borrows} | TXS: ${txs} | history length: ${histLen}`);
-    }, 3000);
-    return () => clearInterval(check);
-  }, [all]);
-
   return (
     <Layout>
       <div className="pt-32 pb-24 mx-auto max-w-7xl px-5 sm:px-8">
@@ -89,9 +75,6 @@ function FeedPage() {
           <p className="mt-6 text-white/60 text-lg leading-relaxed">
             A live market for Arbitrum activity. Track GAS, AAVE BORROWS, and TXS PER BLOCK as the chain moves in real time.
           </p>
-          <div className="mt-4 px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-300 text-xs font-mono break-all">
-            {debugMsg}
-          </div>
         </div>
 
         <div className="mt-16 grid gap-6 lg:grid-cols-3">
