@@ -34,12 +34,21 @@ let cachedOpen: Position[] = [];
 let cachedHist: Position[] = [];
 
 const HIST_KEY = "chainflux:positions:history";
+const LEV_KEY = "chainflux:positions:leverage";
+
 function readHist(): Position[] {
   if (typeof window === "undefined") return [];
   try { return JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); } catch { return []; }
 }
 function writeHist(v: Position[]) {
   localStorage.setItem(HIST_KEY, JSON.stringify(v));
+}
+function readLevMap(): Record<string, 2 | 5> {
+  if (typeof window === "undefined") return {};
+  try { return JSON.parse(localStorage.getItem(LEV_KEY) || "{}"); } catch { return {}; }
+}
+function writeLevMap(v: Record<string, 2 | 5>) {
+  localStorage.setItem(LEV_KEY, JSON.stringify(v));
 }
 
 export async function openPosition(
@@ -57,9 +66,24 @@ export async function openPosition(
   const directionIndex = direction === "LONG" ? 0 : 1;
   const value = ethers.parseEther(collateralEth.toFixed(6));
 
-  const tx = await contract.openPosition(marketIndex, directionIndex, leverage, { value });
-  await tx.wait();
-  await refreshPositions(await signer.getAddress());
+  const tx = await contract.openPosition(marketIndex, directionIndex, leverage, {
+    value,
+    gasLimit: 300000,
+  });
+  const receipt = await tx.wait();
+
+  // Store leverage by position ID — we get the ID from the event or by refreshing
+  // Optimistically store against a temp key, then reconcile on refresh
+  const address = await signer.getAddress();
+  const levMap = readLevMap();
+
+  // After refresh, new positions that aren't in levMap yet get assigned from pending
+  // We store a "pending" entry keyed by market+direction+openedAt (block timestamp)
+  const pendingKey = `pending:${market}:${direction}:${receipt.blockNumber}`;
+  levMap[pendingKey] = leverage;
+  writeLevMap(levMap);
+
+  await refreshPositions(address);
 }
 
 export async function closePosition(
@@ -81,6 +105,11 @@ export async function closePosition(
     writeHist(hist);
   }
 
+  // Clean up leverage map
+  const levMap = readLevMap();
+  delete levMap[positionId];
+  writeLevMap(levMap);
+
   await refreshPositions(await signer.getAddress());
 }
 
@@ -91,16 +120,21 @@ export async function refreshPositions(address: string): Promise<void> {
 
     const ids: bigint[] = await contract.getUserPositions(address);
     const positions: Position[] = [];
+    const levMap = readLevMap();
 
     await Promise.all(
       ids.map(async (id) => {
         const p = await contract.getPosition(id);
         if (p.open) {
+          const idStr = id.toString();
+          // Look up stored leverage; default 2 if unknown
+          const storedLev: 2 | 5 = levMap[idStr] ?? 2;
+
           positions.push({
-            id: id.toString(),
+            id: idStr,
             market: INDEX_MARKET[Number(p.market)],
             direction: Number(p.direction) === 0 ? "LONG" : "SHORT",
-            leverage: (Number(p.leverage) === 5 ? 5 : 2) as 2 | 5,
+            leverage: storedLev,
             collateral: Number(ethers.formatEther(p.collateral)),
             entryPrice: Number(p.entryPrice) / 1e18,
             openedAt: Number(p.openedAt) * 1000,
@@ -108,6 +142,24 @@ export async function refreshPositions(address: string): Promise<void> {
         }
       })
     );
+
+    // After we have real IDs, reconcile pending leverage keys
+    // Match pending entries to newly seen positions by process of elimination
+    const knownIds = new Set(positions.map((p) => p.id));
+    const pendingEntries = Object.entries(levMap).filter(([k]) => k.startsWith("pending:"));
+
+    if (pendingEntries.length > 0) {
+      // Find positions that have no leverage stored yet
+      const unassigned = positions.filter((p) => !levMap[p.id]);
+      pendingEntries.forEach(([pendingKey, lev], i) => {
+        if (unassigned[i]) {
+          levMap[unassigned[i].id] = lev as 2 | 5;
+          unassigned[i].leverage = lev as 2 | 5;
+        }
+        delete levMap[pendingKey];
+      });
+      writeLevMap(levMap);
+    }
 
     cachedOpen = positions;
     cachedHist = readHist();
@@ -140,4 +192,4 @@ export function pnl(p: Position, currentPrice: number): number {
     ? currentPrice - p.entryPrice
     : p.entryPrice - currentPrice;
   return (diff / p.entryPrice) * p.collateral * p.leverage;
-}
+    }
