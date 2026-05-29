@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 
-export type Market = "GAS" | "AAVE_BORROWS" | "TXS_PER_BLOCK";
+export type Market = "GAS" | "ACTIVE_ADDRESSES" | "TXS_PER_BLOCK";
 export type Position = {
   id: string;
   market: Market;
@@ -24,8 +24,8 @@ const ABI = [
   "function getMarket(uint8 m) external view returns (uint256 price, uint256 updatedAt, uint256 longOI, uint256 shortOI)"
 ];
 
-const MARKET_INDEX: Record<Market, number> = { GAS: 0, AAVE_BORROWS: 1, TXS_PER_BLOCK: 2 };
-const INDEX_MARKET: Record<number, Market> = { 0: "GAS", 1: "AAVE_BORROWS", 2: "TXS_PER_BLOCK" };
+const MARKET_INDEX: Record<Market, number> = { GAS: 0, ACTIVE_ADDRESSES: 1, TXS_PER_BLOCK: 2 };
+const INDEX_MARKET: Record<number, Market> = { 0: "GAS", 1: "ACTIVE_ADDRESSES", 2: "TXS_PER_BLOCK" };
 
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
@@ -66,19 +66,18 @@ export async function openPosition(
   const directionIndex = direction === "LONG" ? 0 : 1;
   const value = ethers.parseEther(collateralEth.toFixed(6));
 
+  // Bug A fix: 5× needs more gas than 2×
+  const gasLimit = leverage === 5 ? 500000 : 300000;
+
   const tx = await contract.openPosition(marketIndex, directionIndex, leverage, {
     value,
-    gasLimit: 300000,
+    gasLimit,
   });
   const receipt = await tx.wait();
 
-  // Store leverage by position ID — we get the ID from the event or by refreshing
-  // Optimistically store against a temp key, then reconcile on refresh
   const address = await signer.getAddress();
   const levMap = readLevMap();
 
-  // After refresh, new positions that aren't in levMap yet get assigned from pending
-  // We store a "pending" entry keyed by market+direction+openedAt (block timestamp)
   const pendingKey = `pending:${market}:${direction}:${receipt.blockNumber}`;
   levMap[pendingKey] = leverage;
   writeLevMap(levMap);
@@ -95,7 +94,10 @@ export async function closePosition(
   const signer = await provider.getSigner();
   const contract = new ethers.Contract(PROXY_ADDRESS, ABI, signer);
 
-  const tx = await contract.closePosition(BigInt(positionId));
+  // Bug B fix: closePosition was missing gasLimit entirely
+  const tx = await contract.closePosition(BigInt(positionId), {
+    gasLimit: 300000,
+  });
   await tx.wait();
 
   const closed = cachedOpen.find((p) => p.id === positionId);
@@ -105,7 +107,6 @@ export async function closePosition(
     writeHist(hist);
   }
 
-  // Clean up leverage map
   const levMap = readLevMap();
   delete levMap[positionId];
   writeLevMap(levMap);
@@ -127,7 +128,6 @@ export async function refreshPositions(address: string): Promise<void> {
         const p = await contract.getPosition(id);
         if (p.open) {
           const idStr = id.toString();
-          // Look up stored leverage; default 2 if unknown
           const storedLev: 2 | 5 = levMap[idStr] ?? 2;
 
           positions.push({
@@ -143,13 +143,10 @@ export async function refreshPositions(address: string): Promise<void> {
       })
     );
 
-    // After we have real IDs, reconcile pending leverage keys
-    // Match pending entries to newly seen positions by process of elimination
     const knownIds = new Set(positions.map((p) => p.id));
     const pendingEntries = Object.entries(levMap).filter(([k]) => k.startsWith("pending:"));
 
     if (pendingEntries.length > 0) {
-      // Find positions that have no leverage stored yet
       const unassigned = positions.filter((p) => !levMap[p.id]);
       pendingEntries.forEach(([pendingKey, lev], i) => {
         if (unassigned[i]) {
