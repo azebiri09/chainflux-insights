@@ -15,12 +15,6 @@ export const Route = createFileRoute("/trade")({
 const MARKETS: Market[] = ["GAS", "AAVE_BORROWS", "TXS_PER_BLOCK"];
 const TIMEFRAMES = ["1m", "5m", "15m", "1h"] as const;
 type Timeframe = typeof TIMEFRAMES[number];
-const TIMEFRAME_TICKS: Record<Timeframe, number> = {
-  "1m": 6,
-  "5m": 30,
-  "15m": 90,
-  "1h": 360,
-};
 
 const MARKET_DISPLAY: Record<Market, string> = {
   GAS: "GAS",
@@ -38,7 +32,6 @@ function TradePage() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [chartType, setChartType] = useState<"line" | "candle">("line");
   const [timeframe, setTimeframe] = useState<Timeframe>("5m");
-  const [zoom, setZoom] = useState(1);
 
   const wallet = useWallet();
   const m = useMarket(market);
@@ -46,7 +39,6 @@ function TradePage() {
 
   const sizeNum = Number(size) || 0;
 
-  // Liquidation price — 80% of margin lost
   const liquidationPrice = useMemo(() => {
     if (!m.current) return null;
     const moveToLiq = 0.8 / leverage;
@@ -54,17 +46,13 @@ function TradePage() {
     return m.current * (1 + moveToLiq);
   }, [m.current, dir, leverage]);
 
-  const visibleData = useMemo(() => {
-    const ticks = Math.floor(TIMEFRAME_TICKS[timeframe] / zoom);
-    return m.history.slice(-Math.max(ticks, 4));
-  }, [m.history, timeframe, zoom]);
-
   const tfChange = useMemo(() => {
-    if (visibleData.length < 2) return 0;
-    const first = visibleData[0];
-    const last = visibleData[visibleData.length - 1];
+    const history = m.history;
+    if (history.length < 2) return 0;
+    const first = history[0];
+    const last = history[history.length - 1];
     return first ? ((last - first) / first) * 100 : 0;
-  }, [visibleData]);
+  }, [m.history]);
 
   const onOpen = async () => {
     if (!wallet || sizeNum <= 0) return;
@@ -168,44 +156,27 @@ function TradePage() {
                   ))}
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setZoom((z) => Math.min(z * 2, 8))}
-                      className="w-7 h-7 rounded flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 text-lg transition-colors"
-                    >
-                      +
-                    </button>
-                    <button
-                      onClick={() => setZoom((z) => Math.max(z / 2, 0.25))}
-                      className="w-7 h-7 rounded flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 text-lg transition-colors"
-                    >
-                      −
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
-                    <button
-                      onClick={() => setChartType("line")}
-                      className={`px-3 py-1 rounded text-xs transition-colors ${
-                        chartType === "line"
-                          ? "bg-white/10 text-white"
-                          : "text-white/40 hover:text-white/70"
-                      }`}
-                    >
-                      Line
-                    </button>
-                    <button
-                      onClick={() => setChartType("candle")}
-                      className={`px-3 py-1 rounded text-xs transition-colors ${
-                        chartType === "candle"
-                          ? "bg-white/10 text-white"
-                          : "text-white/40 hover:text-white/70"
-                      }`}
-                    >
-                      Candle
-                    </button>
-                  </div>
+                <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
+                  <button
+                    onClick={() => setChartType("line")}
+                    className={`px-3 py-1 rounded text-xs transition-colors ${
+                      chartType === "line"
+                        ? "bg-white/10 text-white"
+                        : "text-white/40 hover:text-white/70"
+                    }`}
+                  >
+                    Line
+                  </button>
+                  <button
+                    onClick={() => setChartType("candle")}
+                    className={`px-3 py-1 rounded text-xs transition-colors ${
+                      chartType === "candle"
+                        ? "bg-white/10 text-white"
+                        : "text-white/40 hover:text-white/70"
+                    }`}
+                  >
+                    Candle
+                  </button>
                 </div>
               </div>
 
@@ -214,21 +185,24 @@ function TradePage() {
                 style={{ touchAction: "none" }}
               >
                 <TradingChart
-  data={visibleData}
-  type={chartType}
-  height={300}
-  entryPrice={open.find(p => p.market === market)?.entryPrice}
-  liquidationPrice={open.find(p => p.market === market) 
-    ? (() => {
-        const pos = open.find(p => p.market === market)!;
-        const moveToLiq = 0.8 / pos.leverage;
-        return pos.direction === "LONG"
-          ? pos.entryPrice * (1 - moveToLiq)
-          : pos.entryPrice * (1 + moveToLiq);
-      })()
-    : liquidationPrice ?? undefined}
-  direction={open.find(p => p.market === market)?.direction ?? dir}
- />
+                  data={m.history}
+                  timeframe={timeframe}
+                  type={chartType}
+                  height={300}
+                  entryPrice={open.find(p => p.market === market)?.entryPrice}
+                  liquidationPrice={
+                    open.find(p => p.market === market)
+                      ? (() => {
+                          const pos = open.find(p => p.market === market)!;
+                          const moveToLiq = 0.8 / pos.leverage;
+                          return pos.direction === "LONG"
+                            ? pos.entryPrice * (1 - moveToLiq)
+                            : pos.entryPrice * (1 + moveToLiq);
+                        })()
+                      : liquidationPrice ?? undefined
+                  }
+                  direction={open.find(p => p.market === market)?.direction ?? dir}
+                />
               </div>
             </div>
           </div>
@@ -405,9 +379,10 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
             const cur = price(p.market);
             const v = pnl(p, cur);
             const moveToLiq = 0.8 / p.leverage;
-            const liqPrice = p.direction === "LONG"
-              ? p.entryPrice * (1 - moveToLiq)
-              : p.entryPrice * (1 + moveToLiq);
+            const liqPrice =
+              p.direction === "LONG"
+                ? p.entryPrice * (1 - moveToLiq)
+                : p.entryPrice * (1 + moveToLiq);
             return (
               <tr key={p.id} className="border-t border-white/5">
                 <td className="px-6 py-4 text-white">{MARKET_DISPLAY[p.market]}</td>
