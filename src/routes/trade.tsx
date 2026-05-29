@@ -12,13 +12,13 @@ export const Route = createFileRoute("/trade")({
   head: () => ({ meta: [{ title: "Trade — ChainFlux" }] }),
 });
 
-const MARKETS: Market[] = ["GAS", "AAVE_BORROWS", "TXS_PER_BLOCK"];
+const MARKETS: Market[] = ["GAS", "ACTIVE_ADDRESSES", "TXS_PER_BLOCK"];
 const TIMEFRAMES = ["1m", "5m", "15m", "1h"] as const;
 type Timeframe = typeof TIMEFRAMES[number];
 
 const MARKET_DISPLAY: Record<Market, string> = {
   GAS: "GAS",
-  AAVE_BORROWS: "AAVE BORROWS",
+  ACTIVE_ADDRESSES: "ACTIVE ADDRESSES",
   TXS_PER_BLOCK: "TXS PER BLOCK",
 };
 
@@ -334,10 +334,10 @@ function TradePage() {
 function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"] }) {
   const [closing, setClosing] = useState<string | null>(null);
   const gas = useMarket("GAS");
-  const aave = useMarket("AAVE_BORROWS");
+  const activeAddresses = useMarket("ACTIVE_ADDRESSES");
   const txs = useMarket("TXS_PER_BLOCK");
   const price = (m: Market) =>
-    m === "GAS" ? gas.current : m === "AAVE_BORROWS" ? aave.current : txs.current;
+    m === "GAS" ? gas.current : m === "ACTIVE_ADDRESSES" ? activeAddresses.current : txs.current;
 
   const onClose = async (id: string, cur: number) => {
     setClosing(id);
