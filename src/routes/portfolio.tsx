@@ -15,10 +15,10 @@ function PortfolioPage() {
   const wallet = useWallet();
   const { open, hist } = usePositions(wallet);
   const gas = useMarket("GAS");
-  const aave = useMarket("AAVE_BORROWS");
+  const activeAddresses = useMarket("ACTIVE_ADDRESSES");
   const txs = useMarket("TXS_PER_BLOCK");
   const price = (m: Market) =>
-    m === "GAS" ? gas.current : m === "AAVE_BORROWS" ? aave.current : txs.current;
+    m === "GAS" ? gas.current : m === "ACTIVE_ADDRESSES" ? activeAddresses.current : txs.current;
 
   return (
     <Layout>
@@ -136,4 +136,4 @@ function PortfolioPage() {
       </div>
     </Layout>
   );
-        }
+  }
