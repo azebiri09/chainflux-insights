@@ -5,13 +5,13 @@ const KEEPER_API = "https://chainflux-production.up.railway.app";
 
 export const MARKET_LABELS: Record<Market, string> = {
   GAS: "GAS",
-  AAVE_BORROWS: "AAVE BORROWS",
+  ACTIVE_ADDRESSES: "ACTIVE ADDRESSES",
   TXS_PER_BLOCK: "TXS PER BLOCK",
 };
 
 export const MARKET_UNITS: Record<Market, string> = {
   GAS: "gwei",
-  AAVE_BORROWS: "USD",
+  ACTIVE_ADDRESSES: "addresses",
   TXS_PER_BLOCK: "txs",
 };
 
@@ -21,8 +21,8 @@ type State = {
 };
 
 const state: State = {
-  history: { GAS: [], AAVE_BORROWS: [], TXS_PER_BLOCK: [] },
-  prev24: { GAS: 0, AAVE_BORROWS: 0, TXS_PER_BLOCK: 0 },
+  history: { GAS: [], ACTIVE_ADDRESSES: [], TXS_PER_BLOCK: [] },
+  prev24: { GAS: 0, ACTIVE_ADDRESSES: 0, TXS_PER_BLOCK: 0 },
 };
 
 const listeners = new Set<() => void>();
@@ -33,12 +33,12 @@ async function fetchPrices() {
     const res = await fetch(KEEPER_API, { cache: "no-store" });
     const data = await res.json() as {
       GAS: number;
-      AAVE_BORROWS: number;
+      ACTIVE_ADDRESSES: number;
       TXS_PER_BLOCK: number;
       updatedAt: number;
     };
 
-    const markets: Market[] = ["GAS", "AAVE_BORROWS", "TXS_PER_BLOCK"];
+    const markets: Market[] = ["GAS", "ACTIVE_ADDRESSES", "TXS_PER_BLOCK"];
 
     for (const m of markets) {
       const value = data[m] ?? 0;
@@ -46,11 +46,9 @@ async function fetchPrices() {
       if (state.history[m].length === 0) {
         state.prev24[m] = value;
       } else if (state.history[m].length >= 1080) {
-        // ~1hr of history at 3s intervals = 1200 ticks; use oldest as 24h ref
         state.prev24[m] = state.history[m][0];
       }
 
-      // Keep up to 1200 ticks (~1hr at 3s polling)
       state.history[m] = [...state.history[m].slice(-1199), value];
     }
 
@@ -85,12 +83,12 @@ export function useMarket(m: Market) {
 
 export function useAllMarkets() {
   const gas = useMarket("GAS");
-  const aaveBorrows = useMarket("AAVE_BORROWS");
+  const activeAddresses = useMarket("ACTIVE_ADDRESSES");
   const txsPerBlock = useMarket("TXS_PER_BLOCK");
-  return { GAS: gas, AAVE_BORROWS: aaveBorrows, TXS_PER_BLOCK: txsPerBlock };
+  return { GAS: gas, ACTIVE_ADDRESSES: activeAddresses, TXS_PER_BLOCK: txsPerBlock };
 }
 
 export function getCurrent(m: Market) {
   const h = state.history[m];
   return h[h.length - 1] ?? 0;
-    }
+}
