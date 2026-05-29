@@ -8,14 +8,14 @@ export const Route = createFileRoute("/feed")({
   head: () => ({ meta: [{ title: "Network Feed — ChainFlux" }] }),
 });
 
-const COPY: Record<"GAS" | "AAVE_BORROWS" | "TXS_PER_BLOCK", { title: string; body: string }> = {
+const COPY: Record<"GAS" | "ACTIVE_ADDRESSES" | "TXS_PER_BLOCK", { title: string; body: string }> = {
   GAS: {
     title: "Network Congestion",
     body: "Arbitrum's base fee moves with demand. When the network gets busy, gas spikes. Trade the direction before it moves.",
   },
-  AAVE_BORROWS: {
-    title: "Aave Borrow Volume",
-    body: "Total USD borrowed on Aave is a direct signal of DeFi leverage appetite. Rising borrows means risk-on. Falling means capital is pulling back.",
+  ACTIVE_ADDRESSES: {
+    title: "Active Addresses",
+    body: "The number of unique addresses active in each block is a raw signal of network participation. Surging addresses means growing activity. Falling means the chain is quiet.",
   },
   TXS_PER_BLOCK: {
     title: "Transactions Per Block",
@@ -29,7 +29,7 @@ function FeedCard({
   history,
   size = "wide",
 }: {
-  k: "GAS" | "AAVE_BORROWS" | "TXS_PER_BLOCK";
+  k: "GAS" | "ACTIVE_ADDRESSES" | "TXS_PER_BLOCK";
   current: number;
   history: number[];
   size?: "wide" | "tall" | "full";
@@ -73,7 +73,7 @@ function FeedPage() {
             The heartbeat, in real time.
           </h1>
           <p className="mt-6 text-white/60 text-lg leading-relaxed">
-            A live market for Arbitrum activity. Track GAS, AAVE BORROWS, and TXS PER BLOCK as the chain moves in real time.
+            A live market for Arbitrum activity. Track GAS, ACTIVE ADDRESSES, and TXS PER BLOCK as the chain moves in real time.
           </p>
         </div>
 
@@ -82,7 +82,7 @@ function FeedPage() {
             <FeedCard k="GAS" current={all.GAS.current} history={all.GAS.history} size="tall" />
           </div>
           <div className="lg:pt-10">
-            <FeedCard k="AAVE_BORROWS" current={all.AAVE_BORROWS.current} history={all.AAVE_BORROWS.history} />
+            <FeedCard k="ACTIVE_ADDRESSES" current={all.ACTIVE_ADDRESSES.current} history={all.ACTIVE_ADDRESSES.history} />
           </div>
         </div>
 
@@ -92,4 +92,4 @@ function FeedPage() {
       </div>
     </Layout>
   );
-}
+    }
