@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export type Market = "GAS" | "ACTIVE_ADDRESSES" | "TXS_PER_BLOCK";
+export type Market = "GAS" | "TXS_PER_BLOCK";
 
 export type FeedMetric =
   | "ACTIVE_ADDRESSES"
@@ -16,13 +16,11 @@ const KEEPER_API = "https://chainflux-production.up.railway.app";
 
 export const MARKET_LABELS: Record<Market, string> = {
   GAS: "GAS",
-  ACTIVE_ADDRESSES: "ACTIVE ADDRESSES",
   TXS_PER_BLOCK: "TXS PER BLOCK",
 };
 
 export const MARKET_UNITS: Record<Market, string> = {
   GAS: "gwei",
-  ACTIVE_ADDRESSES: "addresses",
   TXS_PER_BLOCK: "txs",
 };
 
@@ -47,8 +45,6 @@ export const FEED_UNITS: Record<FeedMetric, string> = {
   BRIDGE_INFLOWS_OUTFLOWS: "ETH",
   DEX_VOLUME: "swaps",
 };
-
-// ─── Static AI explanations per metric per state ──────────────────────────────
 
 type MetricState = "low" | "medium" | "high";
 
@@ -222,8 +218,10 @@ export const FEED_EXPLANATIONS: Record<FeedMetric, Record<MetricState, Explanati
   },
 };
 
-export function getMetricState(metric: FeedMetric, value: number): MetricState {
-  const thresholds: Record<FeedMetric, [number, number]> = {
+export function getMetricState(metric: string, value: number): MetricState {
+  const thresholds: Record<string, [number, number]> = {
+    GAS: [10, 40],
+    TXS_PER_BLOCK: [100, 200],
     ACTIVE_ADDRESSES: [200, 600],
     WHALE_TRANSFERS: [1, 4],
     ETH_INTO_AAVE: [1, 10],
@@ -233,7 +231,9 @@ export function getMetricState(metric: FeedMetric, value: number): MetricState {
     BRIDGE_INFLOWS_OUTFLOWS: [1, 10],
     DEX_VOLUME: [5, 20],
   };
-  const [low, high] = thresholds[metric];
+  const t = thresholds[metric];
+  if (!t) return "medium";
+  const [low, high] = t;
   if (value <= low) return "low";
   if (value >= high) return "high";
   return "medium";
@@ -247,8 +247,8 @@ type PerpsState = {
 };
 
 const perpsState: PerpsState = {
-  history: { GAS: [], ACTIVE_ADDRESSES: [], TXS_PER_BLOCK: [] },
-  prev24: { GAS: 0, ACTIVE_ADDRESSES: 0, TXS_PER_BLOCK: 0 },
+  history: { GAS: [], TXS_PER_BLOCK: [] },
+  prev24: { GAS: 0, TXS_PER_BLOCK: 0 },
 };
 
 const perpsListeners = new Set<() => void>();
@@ -309,7 +309,6 @@ export function useAllMarkets() {
   const txsPerBlock = useMarket("TXS_PER_BLOCK");
   return {
     GAS: gas,
-    ACTIVE_ADDRESSES: { history: [], current: 0, change: 0 },
     TXS_PER_BLOCK: txsPerBlock,
   };
 }
@@ -387,4 +386,4 @@ export function useNetworkFeed() {
     return () => { feedListeners.delete(fn); };
   }, []);
   return { ...feedState };
-  }
+      }
