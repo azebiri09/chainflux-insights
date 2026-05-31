@@ -28,7 +28,7 @@ const PREDICT_ABI = [
 const FEED_METRICS: FeedMetric[] = [
   "ACTIVE_ADDRESSES",
   "WHALE_TRANSFERS",
-  "ETH_INTO_AAVE",
+  "ETH_LARGE_TRANSFERS",
   "LIQUIDATION_VOLUME",
   "STABLES_MINTED_BURNED",
   "NEW_WALLET_CREATION",
@@ -39,7 +39,7 @@ const FEED_METRICS: FeedMetric[] = [
 const METRIC_INDEX: Record<FeedMetric, number> = {
   ACTIVE_ADDRESSES: 0,
   WHALE_TRANSFERS: 1,
-  ETH_INTO_AAVE: 2,
+  ETH_LARGE_TRANSFERS: 2,
   LIQUIDATION_VOLUME: 3,
   STABLES_MINTED_BURNED: 4,
   NEW_WALLET_CREATION: 5,
@@ -97,7 +97,7 @@ type UserStake = {
 
 function formatValue(metric: string, value: number): string {
   if (value === 0) return "Quiet";
-  if (metric === "ETH_INTO_AAVE" || metric === "BRIDGE_INFLOWS_OUTFLOWS")
+  if (metric === "ETH_LARGE_TRANSFERS" || metric === "BRIDGE_INFLOWS_OUTFLOWS")
     return value.toFixed(2);
   if (metric === "STABLES_MINTED_BURNED") {
     if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
@@ -213,13 +213,9 @@ function MetricCard({
   const load = useCallback(async () => {
     try {
       const contract = await getReadContract();
-
       const roundId: bigint = await contract.getLatestRound(metricIndex, timeframe);
-
       const raw = await contract.rounds(roundId);
 
-      // Tuple order: id(0), metric(1), timeframe(2), startValue(3), endValue(4),
-      // openTime(5), closeTime(6), higherPool(7), lowerPool(8), status(9), result(10)
       const round: RoundData = {
         roundId,
         metric: Number(raw[1]),
@@ -328,7 +324,6 @@ function MetricCard({
         border: "1px solid rgba(255,255,255,0.07)",
       }}
     >
-      {/* Header */}
       <div className="px-5 pt-5 pb-4 flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div
@@ -342,7 +337,6 @@ function MetricCard({
         <StateTag state={state} />
       </div>
 
-      {/* Live value */}
       <div className="px-5 pb-4 flex items-baseline gap-2">
         <span className="text-2xl font-semibold text-white/90 tabular-nums">
           {formatValue(metric, feedValue)}
@@ -352,7 +346,6 @@ function MetricCard({
         </span>
       </div>
 
-      {/* Pool split bar */}
       <div className="px-5 pb-3">
         <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40 mb-1.5">
           <span>Higher {higherPct}%</span>
@@ -369,7 +362,6 @@ function MetricCard({
         </div>
       </div>
 
-      {/* Round info row */}
       <div className="px-5 pb-4 flex items-center justify-between gap-2">
         <div className="text-[10px] uppercase tracking-widest text-white/30">
           {card.loading
@@ -387,10 +379,8 @@ function MetricCard({
         )}
       </div>
 
-      {/* Divider */}
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }} />
 
-      {/* Stake / claim area */}
       <div className="px-5 py-4 flex flex-col gap-3">
         {card.txError && (
           <div className="text-xs text-red-400/80 leading-snug">{card.txError}</div>
@@ -497,7 +487,7 @@ function PredictPage() {
               Predict what Ethereum does next.
             </h1>
             <p className="text-white/45 text-base leading-relaxed max-w-2xl">
-              Stake ETH on whether each on-chain metric will be higher or lower at round close. Win a share of the pool.
+              Stake ETH on whether each onchain metric will be higher or lower at round close. Win a share of the pool.
             </p>
           </div>
 
@@ -542,4 +532,4 @@ function PredictPage() {
       </div>
     </Layout>
   );
-                     }
+  }
