@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import Layout from "@/components/Layout";
 import {
   FEED_LABELS,
@@ -26,6 +27,7 @@ const FEED_METRICS: FeedMetric[] = [
 ];
 
 function formatValue(metric: FeedMetric, value: number): string {
+  if (value === 0) return "Quiet";
   if (metric === "ETH_INTO_AAVE" || metric === "BRIDGE_INFLOWS_OUTFLOWS") {
     return value.toFixed(2);
   }
@@ -37,29 +39,22 @@ function formatValue(metric: FeedMetric, value: number): string {
   return value.toLocaleString();
 }
 
-function StateBar({ state }: { state: "low" | "medium" | "high" }) {
+function StateTag({ state }: { state: "low" | "medium" | "high" }) {
+  const colors = {
+    low: "rgba(255,255,255,0.12)",
+    medium: "rgba(255,255,255,0.12)",
+    high: "rgba(255,255,255,0.12)",
+  };
   return (
-    <div className="flex items-center gap-2 mt-1">
-      {["low", "medium", "high"].map((s) => (
-        <div
-          key={s}
-          className="h-1 flex-1 rounded-full transition-all duration-700"
-          style={{
-            background:
-              s === state
-                ? state === "high"
-                  ? "oklch(0.65 0.20 25)"
-                  : state === "medium"
-                  ? "oklch(0.78 0.15 85)"
-                  : "oklch(0.65 0.15 160)"
-                : "rgba(255,255,255,0.08)",
-          }}
-        />
-      ))}
-      <span className="text-[10px] tracking-widest uppercase text-white/30 ml-1">
-        {state}
-      </span>
-    </div>
+    <span
+      className="text-[9px] tracking-widest uppercase px-2 py-0.5 rounded-full font-medium"
+      style={{
+        background: colors[state],
+        color: "rgba(255,255,255,0.45)",
+      }}
+    >
+      {state}
+    </span>
   );
 }
 
@@ -70,76 +65,74 @@ function FeedCard({
   metric: FeedMetric;
   value: number;
 }) {
+  const [open, setOpen] = useState(false);
   const state = getMetricState(metric, value);
   const explanation = FEED_EXPLANATIONS[metric][state];
-
-  const glowColor =
-    state === "high"
-      ? "rgba(239,68,68,0.12)"
-      : state === "medium"
-      ? "rgba(234,179,8,0.08)"
-      : "rgba(59,130,246,0.08)";
-
-  const accentColor =
-    state === "high"
-      ? "oklch(0.65 0.20 25)"
-      : state === "medium"
-      ? "oklch(0.78 0.15 85)"
-      : "oklch(0.65 0.15 160)";
+  const isQuiet = value === 0;
 
   return (
     <div
-      className="relative rounded-2xl p-7 flex flex-col gap-5 overflow-hidden transition-all duration-700"
+      className="rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer select-none"
       style={{
-        background: `linear-gradient(135deg, rgba(10,15,30,0.95) 0%, rgba(15,20,40,0.90) 100%)`,
+        background: "rgba(255,255,255,0.04)",
         border: "1px solid rgba(255,255,255,0.07)",
-        boxShadow: `0 0 40px ${glowColor}, inset 0 1px 0 rgba(255,255,255,0.05)`,
-        backdropFilter: "blur(20px)",
+        backdropFilter: "blur(16px)",
       }}
+      onClick={() => setOpen((o) => !o)}
     >
-      {/* Ambient glow blob */}
-      <div
-        className="absolute -top-10 -right-10 w-40 h-40 rounded-full pointer-events-none"
-        style={{
-          background: glowColor,
-          filter: "blur(40px)",
-        }}
-      />
+      {/* Row — always visible */}
+      <div className="flex items-center justify-between px-5 py-4 gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex flex-col min-w-0">
+            <span className="text-[11px] tracking-widest uppercase text-white/40 font-medium truncate">
+              {FEED_LABELS[metric]}
+            </span>
+            <div className="flex items-center gap-2 mt-1">
+              <StateTag state={state} />
+            </div>
+          </div>
+        </div>
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 relative z-10">
-        <div>
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="text-right">
+            <div
+              className="text-2xl font-semibold tabular-nums tracking-tight"
+              style={{ color: isQuiet ? "rgba(255,255,255,0.20)" : "rgba(255,255,255,0.92)" }}
+            >
+              {formatValue(metric, value)}
+            </div>
+            {!isQuiet && (
+              <div className="text-[10px] uppercase tracking-widest text-white/25 mt-0.5">
+                {FEED_UNITS[metric]}
+              </div>
+            )}
+          </div>
+
           <div
-            className="text-[10px] tracking-[0.3em] uppercase font-medium"
-            style={{ color: accentColor }}
+            className="transition-transform duration-300 text-white/25"
+            style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
           >
-            {FEED_LABELS[metric]}
-          </div>
-          <StateBar state={state} />
-        </div>
-        <div className="text-right shrink-0">
-          <div className="text-4xl font-semibold text-white tabular-nums tracking-tight">
-            {formatValue(metric, value)}
-          </div>
-          <div className="text-xs text-white/30 mt-1 uppercase tracking-widest">
-            {FEED_UNITS[metric]}
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 5L7 10L12 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </div>
         </div>
       </div>
 
-      {/* Divider */}
-      <div
-        className="h-px w-full relative z-10"
-        style={{ background: "rgba(255,255,255,0.06)" }}
-      />
-
-      {/* AI Explanation */}
-      <div className="relative z-10 flex flex-col gap-3">
-        <ExplainRow label="What is happening" text={explanation.happening} />
-        <ExplainRow label="Why" text={explanation.why} />
-        <ExplainRow label="What it means" text={explanation.means} />
-        <ExplainRow label="What to do" text={explanation.action} accent={accentColor} />
-      </div>
+      {/* Expanded explanation */}
+      {open && (
+        <div
+          className="px-5 pb-5 flex flex-col gap-4"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+        >
+          <div className="pt-4 flex flex-col gap-4">
+            <ExplainRow label="What is happening" text={explanation.happening} />
+            <ExplainRow label="Why" text={explanation.why} />
+            <ExplainRow label="What it means" text={explanation.means} />
+            <ExplainRow label="What to do" text={explanation.action} highlight />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -147,23 +140,20 @@ function FeedCard({
 function ExplainRow({
   label,
   text,
-  accent,
+  highlight,
 }: {
   label: string;
   text: string;
-  accent?: string;
+  highlight?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <div
-        className="text-[10px] tracking-[0.2em] uppercase font-medium"
-        style={{ color: accent ?? "rgba(255,255,255,0.30)" }}
-      >
+    <div className="flex flex-col gap-1">
+      <div className="text-[9px] tracking-[0.25em] uppercase font-medium text-white/30">
         {label}
       </div>
       <div
         className="text-sm leading-relaxed"
-        style={{ color: accent ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.55)" }}
+        style={{ color: highlight ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.50)" }}
       >
         {text}
       </div>
@@ -176,34 +166,39 @@ function FeedPage() {
 
   return (
     <Layout>
-      {/* Background */}
+      {/* Deep navy background matching app style */}
       <div
         className="fixed inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(20,30,70,0.6) 0%, rgba(5,8,20,1) 70%)",
+            "radial-gradient(ellipse 100% 50% at 50% 0%, rgba(15,25,60,0.8) 0%, rgba(5,8,18,1) 65%)",
         }}
       />
 
-      <div className="relative z-10 pt-32 pb-24 mx-auto max-w-7xl px-5 sm:px-8">
+      <div className="relative z-10 pt-32 pb-24 mx-auto max-w-3xl px-5 sm:px-8">
         {/* Hero */}
-        <div className="max-w-2xl mb-16">
-          <div
-            className="text-[10px] tracking-[0.4em] uppercase font-medium mb-4"
-            style={{ color: "oklch(0.78 0.10 245)" }}
-          >
-            Network Feed
-          </div>
-          <h1 className="text-4xl sm:text-6xl font-semibold text-white tracking-tight leading-tight mb-5">
-            The Ethereum pulse. Live.
+        <div className="mb-12">
+          <h1 className="text-4xl sm:text-5xl font-semibold text-white tracking-tight leading-tight mb-6">
+            Live intelligence for the Ethereum network.
           </h1>
-          <p className="text-white/50 text-lg leading-relaxed">
-            Eight live signals from the Ethereum network. Every metric tells you what is happening right now, why it is happening, and what to do next.
-          </p>
+
+          {/* Liquid glass subtitle block */}
+          <div
+            className="rounded-2xl px-6 py-4"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              backdropFilter: "blur(20px)",
+            }}
+          >
+            <p className="text-white/55 text-base leading-relaxed">
+              Follow the metrics that drive on-chain activity and uncover shifts before they become obvious.
+            </p>
+          </div>
         </div>
 
-        {/* Cards grid */}
-        <div className="grid gap-5 sm:grid-cols-2">
+        {/* Metrics list */}
+        <div className="flex flex-col gap-3">
           {FEED_METRICS.map((metric) => (
             <FeedCard
               key={metric}
@@ -215,4 +210,4 @@ function FeedPage() {
       </div>
     </Layout>
   );
-  }
+    }
