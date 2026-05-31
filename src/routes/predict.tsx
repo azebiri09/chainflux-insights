@@ -20,7 +20,7 @@ const PROXY = "0x7708a4C85F526E23090d3B27201487E91AF58694";
 const PREDICT_ABI = [
   "function stake(uint256 roundId, uint8 direction) payable",
   "function claim(uint256 roundId)",
-  "function getRound(uint256 roundId) view returns (uint8 metric, uint8 timeframe, uint256 startValue, uint256 endValue, uint256 higherPool, uint256 lowerPool, uint8 status, uint256 startTime, uint256 endTime)",
+  "function rounds(uint256 roundId) view returns (uint256 id, uint8 metric, uint8 timeframe, uint256 startValue, uint256 endValue, uint256 openTime, uint256 closeTime, uint256 higherPool, uint256 lowerPool, uint8 status, uint8 result)",
   "function getUserStake(uint256 roundId, address user) view returns (uint256 amount, uint8 direction, bool claimed)",
   "function getLatestRound(uint8 metric, uint8 timeframe) view returns (uint256)",
 ];
@@ -74,7 +74,6 @@ const STATE_COLORS = {
   },
 };
 
-// Round status enum matching contract
 const STATUS = { OPEN: 0, RESOLVED: 1, CANCELLED: 2 };
 
 type RoundData = {
@@ -148,20 +147,20 @@ function StateTag({ state }: { state: "low" | "medium" | "high" }) {
   );
 }
 
-async function getEthersContract() {
-  const { ethers } = await import("ethers");
-  if (!window.ethereum) throw new Error("No wallet");
-  const provider = new ethers.BrowserProvider(window.ethereum as any);
-  const signer = await provider.getSigner();
-  return new ethers.Contract(PROXY, PREDICT_ABI, signer);
-}
-
 async function getReadContract() {
   const { ethers } = await import("ethers");
   const provider = new ethers.JsonRpcProvider(
     "https://sepolia-rollup.arbitrum.io/rpc"
   );
   return new ethers.Contract(PROXY, PREDICT_ABI, provider);
+}
+
+async function getEthersContract() {
+  const { ethers } = await import("ethers");
+  if (!window.ethereum) throw new Error("No wallet");
+  const provider = new ethers.BrowserProvider(window.ethereum as any);
+  const signer = await provider.getSigner();
+  return new ethers.Contract(PROXY, PREDICT_ABI, signer);
 }
 
 function useCountdown(endTime: bigint | undefined) {
@@ -174,7 +173,6 @@ function useCountdown(endTime: bigint | undefined) {
   return formatCountdown(endTime);
 }
 
-// Per-card state
 type CardState = {
   round: RoundData | null;
   userStake: UserStake | null;
@@ -215,22 +213,24 @@ function MetricCard({
   const load = useCallback(async () => {
     try {
       const contract = await getReadContract();
-      const { ethers } = await import("ethers");
 
       const roundId: bigint = await contract.getLatestRound(metricIndex, timeframe);
-      const raw = await contract.getRound(roundId);
 
+      const raw = await contract.rounds(roundId);
+
+      // Tuple order: id(0), metric(1), timeframe(2), startValue(3), endValue(4),
+      // openTime(5), closeTime(6), higherPool(7), lowerPool(8), status(9), result(10)
       const round: RoundData = {
         roundId,
-        metric: Number(raw[0]),
-        timeframe: Number(raw[1]),
-        startValue: raw[2],
-        endValue: raw[3],
-        higherPool: raw[4],
-        lowerPool: raw[5],
-        status: Number(raw[6]),
-        startTime: raw[7],
-        endTime: raw[8],
+        metric: Number(raw[1]),
+        timeframe: Number(raw[2]),
+        startValue: raw[3],
+        endValue: raw[4],
+        higherPool: raw[7],
+        lowerPool: raw[8],
+        status: Number(raw[9]),
+        startTime: raw[5],
+        endTime: raw[6],
       };
 
       let userStake: UserStake | null = null;
@@ -244,7 +244,8 @@ function MetricCard({
       }
 
       setCard((c) => ({ ...c, round, userStake, loading: false }));
-    } catch {
+    } catch (e: any) {
+      console.error(`Load error ${metric}:`, e?.message);
       setCard((c) => ({ ...c, loading: false }));
     }
   }, [metricIndex, timeframe, wallet]);
@@ -464,7 +465,6 @@ function MetricCard({
           </div>
         )}
 
-        {/* User's existing stake in this round */}
         {card.userStake && card.userStake.amount > 0n && isOpen && (
           <div className="text-[10px] text-white/30 text-center">
             Your stake: {formatEth(card.userStake.amount)} ETH on{" "}
@@ -491,7 +491,6 @@ function PredictPage() {
       />
 
       <div className="relative z-10 pt-32 pb-24 mx-auto max-w-7xl px-4 sm:px-8">
-        {/* Header */}
         <div className="mb-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
           <div>
             <h1 className="text-4xl sm:text-5xl font-semibold text-white tracking-tight leading-tight mb-4">
@@ -502,7 +501,6 @@ function PredictPage() {
             </p>
           </div>
 
-          {/* Timeframe toggle */}
           <div
             className="flex items-center rounded-xl p-1 shrink-0 self-start sm:self-auto"
             style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
@@ -524,7 +522,6 @@ function PredictPage() {
           </div>
         </div>
 
-        {/* Cards grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {FEED_METRICS.map((metric) => (
             <MetricCard
@@ -536,7 +533,6 @@ function PredictPage() {
           ))}
         </div>
 
-        {/* Legend */}
         <div className="mt-10 flex flex-wrap gap-6 text-[11px] text-white/30 uppercase tracking-widest">
           <span>Min stake 0.0001 ETH</span>
           <span>2% protocol fee</span>
@@ -546,4 +542,4 @@ function PredictPage() {
       </div>
     </Layout>
   );
-  }
+                     }
