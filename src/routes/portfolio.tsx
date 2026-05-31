@@ -15,10 +15,8 @@ function PortfolioPage() {
   const wallet = useWallet();
   const { open, hist } = usePositions(wallet);
   const gas = useMarket("GAS");
-  const activeAddresses = useMarket("ACTIVE_ADDRESSES");
   const txs = useMarket("TXS_PER_BLOCK");
-  const price = (m: Market) =>
-    m === "GAS" ? gas.current : m === "ACTIVE_ADDRESSES" ? activeAddresses.current : txs.current;
+  const price = (m: Market) => m === "GAS" ? gas.current : txs.current;
 
   return (
     <Layout>
@@ -70,14 +68,16 @@ function PortfolioPage() {
                       : p.entryPrice * (1 + moveToLiq);
                     return (
                       <tr key={p.id} className={i % 2 ? "bg-white/[0.02]" : ""}>
-                        <td className="p-4 text-white">{MARKET_LABELS[p.market]}</td>
+                        <td className="p-4 text-white">{MARKET_LABELS[p.market] ?? p.market}</td>
                         <td className={`p-4 ${p.direction === "LONG" ? "text-emerald-300" : "text-red-300"}`}>{p.direction}</td>
                         <td className="p-4 text-white/70">{p.leverage}×</td>
                         <td className="p-4 text-right text-white tabular-nums">{p.collateral.toFixed(4)} ETH</td>
                         <td className="p-4 text-right text-white/80 tabular-nums">{p.entryPrice.toFixed(4)}</td>
                         <td className="p-4 text-right text-red-300 tabular-nums">{liqPrice.toFixed(4)}</td>
-                        <td className="p-4 text-right text-white tabular-nums">{cur.toFixed(4)}</td>
-                        <td className={`p-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>{v.toFixed(4)} ETH</td>
+                        <td className="p-4 text-right text-white tabular-nums">{isFinite(cur) ? cur.toFixed(4) : "—"}</td>
+                        <td className={`p-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                          {isFinite(v) ? `${v.toFixed(4)} ETH` : "—"}
+                        </td>
                         <td className="p-4 text-right">
                           <button onClick={() => closePosition(p.id, cur)} className="px-3 py-1 rounded-md bg-white/5 hover:bg-white/10 text-white text-xs border border-white/10">
                             Close
@@ -114,17 +114,24 @@ function PortfolioPage() {
                 </thead>
                 <tbody>
                   {hist.map((p, i) => {
-                    const v = pnl(p, p.closePrice ?? p.entryPrice);
+                    const closePrice = typeof p.closePrice === "number" && isFinite(p.closePrice)
+                      ? p.closePrice
+                      : p.entryPrice;
+                    const v = pnl(p, closePrice);
                     return (
                       <tr key={p.id} className={i % 2 ? "bg-white/[0.02]" : ""}>
-                        <td className="p-4 text-white">{MARKET_LABELS[p.market]}</td>
+                        <td className="p-4 text-white">{MARKET_LABELS[p.market] ?? p.market}</td>
                         <td className={`p-4 ${p.direction === "LONG" ? "text-emerald-300" : "text-red-300"}`}>{p.direction}</td>
                         <td className="p-4 text-white/70">{p.leverage}×</td>
                         <td className="p-4 text-right text-white tabular-nums">{p.collateral.toFixed(4)} ETH</td>
                         <td className="p-4 text-right text-white/80 tabular-nums">{p.entryPrice.toFixed(4)}</td>
-                        <td className="p-4 text-right text-white/80 tabular-nums">{(p.closePrice ?? 0).toFixed(4)}</td>
-                        <td className={`p-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>{v.toFixed(4)} ETH</td>
-                        <td className="p-4 text-right text-white/60">{p.closedAt ? new Date(p.closedAt).toLocaleString() : ""}</td>
+                        <td className="p-4 text-right text-white/80 tabular-nums">{closePrice.toFixed(4)}</td>
+                        <td className={`p-4 text-right tabular-nums ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                          {isFinite(v) ? `${v.toFixed(4)} ETH` : "—"}
+                        </td>
+                        <td className="p-4 text-right text-white/60">
+                          {p.closedAt ? new Date(p.closedAt).toLocaleString() : "—"}
+                        </td>
                       </tr>
                     );
                   })}
@@ -136,4 +143,4 @@ function PortfolioPage() {
       </div>
     </Layout>
   );
-  }
+          }
