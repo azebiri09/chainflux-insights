@@ -4,6 +4,7 @@ import { useWallet, connectWallet, disconnectWallet, shortAddr } from "@/lib/wal
 
 const links = [
   { to: "/trade", label: "Trade" },
+  { to: "/predict", label: "Predict" },
   { to: "/feed", label: "Network Feed" },
   { to: "/leaderboard", label: "Leaderboard" },
   { to: "/portfolio", label: "Portfolio" },
@@ -96,4 +97,4 @@ export default function Navbar({ transparentOnTop = false }: { transparentOnTop?
       )}
     </header>
   );
-}
+  }
