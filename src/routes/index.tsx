@@ -9,15 +9,24 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "ChainFlux — Trade the heartbeat of blockchain" },
-      { name: "description", content: "Trade gas fees, network usage, and capital movement on Arbitrum in real time." },
+      { name: "description", content: "Trade gas fees and transaction throughput on Arbitrum in real time." },
     ],
   }),
 });
 
 const markets = [
-  { code: "GAS", name: "Network Congestion", desc: "Trade Arbitrum gas in real time.", sub: "As network activity rises, fees react instantly." },
-  { code: "ACTIVE_ADDRESSES", name: "Active Addresses", desc: "Trade the number of unique addresses active per block.", sub: "Follow participation as network activity accelerates or slows down." },
-  { code: "TXS_PER_BLOCK", name: "Transactions Per Block", desc: "Track onchain throughput across Arbitrum.", sub: "Trade live transaction density as the network heats up or cools down." },
+  {
+    code: "GAS",
+    name: "Gas Price",
+    desc: "Trade Ethereum gas fees in real time.",
+    sub: "As network demand rises and falls, gas reacts instantly. Be first to the move.",
+  },
+  {
+    code: "TXS_PER_BLOCK",
+    name: "Transactions Per Block",
+    desc: "Track onchain throughput across the network.",
+    sub: "Trade live transaction density as the network heats up or cools down.",
+  },
 ] as const;
 
 const steps = [
@@ -38,6 +47,7 @@ const leaderboard = [
 function Index() {
   const all = useAllMarkets();
   const navigate = useNavigate();
+
   return (
     <Layout hideNav>
       {/* Hero */}
@@ -76,7 +86,7 @@ function Index() {
             <span className="text-white/70">onchain activity</span>
           </h1>
           <p className="mt-8 text-base sm:text-lg text-white/65 max-w-2xl mx-auto leading-relaxed">
-            Trade gas fees, network usage, and capital movement on Arbitrum in real time.
+            Trade gas fees and transaction throughput on Arbitrum in real time. The network is the market.
           </p>
           <div className="mt-12">
             <button
@@ -104,15 +114,15 @@ function Index() {
           </p>
           <p>
             Instead of betting on whether a token goes up or down, you trade the network itself.
-            When Arbitrum heats up, gas climbs. When users come back, transactions per block rises.
-            When participation surges, active addresses follow. Every one of those moments is now tradable.
+            When Ethereum heats up, gas climbs. When users come back, transactions per block rises.
+            Every one of those moments is now tradable.
           </p>
         </div>
       </section>
 
       {/* Markets */}
       <section className="mx-auto max-w-7xl px-6 pb-24">
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 max-w-3xl">
           {markets.map((m) => (
             <div key={m.code} className="glass rounded-2xl p-7">
               <div className="text-[10px] tracking-[0.3em] text-primary/80 uppercase">{m.code}</div>
@@ -132,7 +142,7 @@ function Index() {
         </h2>
         <p className="mt-8 text-white/70 text-lg leading-relaxed max-w-3xl">
           By the time a token rallies, the signal has already been onchain for hours. Builders, analysts and
-          serious traders have always watched gas, transactions and flow to feel the network in real time.
+          serious traders have always watched gas and transaction flow to feel the network in real time.
           ChainFlux gives that feed a price — so you can trade conviction the moment you see it, not after
           the candle has already printed.
         </p>
@@ -155,10 +165,10 @@ function Index() {
       <section className="mx-auto max-w-7xl px-6 py-28">
         <h2 className="text-4xl sm:text-5xl font-semibold text-white tracking-tight">Network Feed</h2>
         <p className="mt-5 text-white/60 max-w-2xl text-lg leading-relaxed">
-          A live market for Arbitrum activity. Track GAS, ACTIVE ADDRESSES, and TXS PER BLOCK as the chain moves in real time.
+          A live pulse of the Ethereum network. Track GAS and TXS PER BLOCK as the chain moves in real time.
         </p>
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
-          {(["GAS", "ACTIVE_ADDRESSES", "TXS_PER_BLOCK"] as const).map((k) => (
+        <div className="mt-12 grid gap-6 md:grid-cols-2 max-w-3xl">
+          {(["GAS", "TXS_PER_BLOCK"] as const).map((k) => (
             <div key={k} className="glass rounded-2xl p-6">
               <div className="flex items-baseline justify-between">
                 <div className="text-[10px] tracking-[0.3em] text-white/50 uppercase">{k.replace(/_/g, " ")}</div>
@@ -217,4 +227,4 @@ function Index() {
       </section>
     </Layout>
   );
-            }
+      }
