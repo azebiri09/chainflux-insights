@@ -19,8 +19,6 @@ const PREDICT_ABI = [
   "function getLatestRound(uint8 metric, uint8 timeframe) view returns (uint256)",
 ];
 
-// ─── ACTIVE METRICS ONLY ──────────────────────────────────────────────────────
-
 type ActiveMetric = "ACTIVE_ADDRESSES" | "GAS_PRICE" | "TXS_PER_BLOCK";
 
 const ACTIVE_METRICS: ActiveMetric[] = [
@@ -29,8 +27,6 @@ const ACTIVE_METRICS: ActiveMetric[] = [
   "TXS_PER_BLOCK",
 ];
 
-// Contract IDs — fixed, never change
-// ACTIVE_ADDRESSES = 0, GAS_PRICE repurposed as ID 2, TXS_PER_BLOCK repurposed as ID 3
 const METRIC_CONTRACT_ID: Record<ActiveMetric, number> = {
   ACTIVE_ADDRESSES: 0,
   GAS_PRICE: 2,
@@ -49,7 +45,14 @@ const METRIC_UNIT: Record<ActiveMetric, string> = {
   TXS_PER_BLOCK: "txs",
 };
 
-// ─── FEED ─────────────────────────────────────────────────────────────────────
+const METRIC_DESCRIPTION: Record<ActiveMetric, string> = {
+  ACTIVE_ADDRESSES:
+    "How many unique wallets are touching the chain right now. A surge means mass participation. A drop means people are sitting out. What happens next hour?",
+  GAS_PRICE:
+    "The cost of doing anything on Ethereum. When gas spikes, something big is happening. When it drops, the chain is quiet. Predict where it goes next.",
+  TXS_PER_BLOCK:
+    "How busy each Ethereum block is right now. High transaction counts mean the network is under pressure. Low counts mean things are calm. Which way is it heading?",
+};
 
 type FeedData = {
   ACTIVE_ADDRESSES: number;
@@ -79,7 +82,6 @@ const EMPTY_FEED: FeedData = {
 
 function useFeed() {
   const [feed, setFeed] = useState<FeedData>(EMPTY_FEED);
-
   useEffect(() => {
     async function fetchFeed() {
       try {
@@ -94,41 +96,21 @@ function useFeed() {
     const id = setInterval(fetchFeed, 30_000);
     return () => clearInterval(id);
   }, []);
-
   return feed;
 }
 
 function getMetricValues(metric: ActiveMetric, feed: FeedData) {
   switch (metric) {
     case "ACTIVE_ADDRESSES":
-      return {
-        current: feed.ACTIVE_ADDRESSES,
-        high: feed.ACTIVE_DAILY_HIGH,
-        low: feed.ACTIVE_DAILY_LOW,
-      };
+      return { current: feed.ACTIVE_ADDRESSES, high: feed.ACTIVE_DAILY_HIGH, low: feed.ACTIVE_DAILY_LOW };
     case "GAS_PRICE":
-      return {
-        current: feed.GAS,
-        high: feed.GAS_DAILY_HIGH,
-        low: feed.GAS_DAILY_LOW,
-      };
+      return { current: feed.GAS, high: feed.GAS_DAILY_HIGH, low: feed.GAS_DAILY_LOW };
     case "TXS_PER_BLOCK":
-      return {
-        current: feed.TXS_PER_BLOCK,
-        high: feed.TXS_DAILY_HIGH,
-        low: feed.TXS_DAILY_LOW,
-      };
+      return { current: feed.TXS_PER_BLOCK, high: feed.TXS_DAILY_HIGH, low: feed.TXS_DAILY_LOW };
   }
 }
 
-// ─── DYNAMIC QUESTIONS ────────────────────────────────────────────────────────
-
-function getDynamicQuestion(
-  metric: ActiveMetric,
-  current: number,
-  high: number,
-  low: number
-): string {
+function getDynamicQuestion(metric: ActiveMetric, current: number, high: number, low: number): string {
   if (high === 0) {
     switch (metric) {
       case "ACTIVE_ADDRESSES": return "Will active addresses increase?";
@@ -136,29 +118,23 @@ function getDynamicQuestion(
       case "TXS_PER_BLOCK": return "Will transactions per block increase?";
     }
   }
-
   const range = high - low;
   const position = range > 0 ? (current - low) / range : 0.5;
-
   switch (metric) {
     case "ACTIVE_ADDRESSES":
-      if (position > 0.8) return "Will addresses reach today's high?";
-      if (position < 0.2) return "Will active addresses rise by more than 10%?";
+      if (position >= 0.8) return "Will active addresses reach today's high?";
+      if (position <= 0.2) return "Will active addresses rise by more than 10%?";
       return "Will active addresses increase?";
-
     case "GAS_PRICE":
-      if (position > 0.8) return `Will gas exceed ${high.toFixed(2)} gwei?`;
-      if (position < 0.2) return "Will gas rise by more than 10%?";
+      if (position >= 0.8) return "Will gas reach today's high?";
+      if (position <= 0.2) return "Will gas rise by more than 10%?";
       return "Will gas be higher in 1 hour?";
-
     case "TXS_PER_BLOCK":
-      if (position > 0.8) return "Will transactions reach today's high?";
-      if (position < 0.2) return "Will transactions rise by more than 5%?";
+      if (position >= 0.8) return "Will transaction activity reach today's high?";
+      if (position <= 0.2) return "Will transactions rise by more than 5%?";
       return "Will transactions per block increase?";
   }
 }
-
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 function formatValue(metric: ActiveMetric, value: number): string {
   if (value === 0) return "Loading";
@@ -198,30 +174,28 @@ function poolSplit(higher: bigint, lower: bigint) {
 function getActivityColor(position: number) {
   if (position > 0.65)
     return {
-      dot: "#34d399",
-      bg: "rgba(16,185,129,0.10)",
-      border: "rgba(16,185,129,0.22)",
-      text: "rgba(110,231,183,0.9)",
-      label: "High",
+      bg: "rgba(16,185,129,0.12)",
+      border: "rgba(16,185,129,0.28)",
+      text: "rgba(110,231,183,0.95)",
+      bar: "#34d399",
+      label: "HIGH",
     };
   if (position > 0.35)
     return {
-      dot: "#facc15",
-      bg: "rgba(234,179,8,0.10)",
-      border: "rgba(234,179,8,0.22)",
-      text: "rgba(253,224,71,0.9)",
-      label: "Mid",
+      bg: "rgba(234,179,8,0.12)",
+      border: "rgba(234,179,8,0.28)",
+      text: "rgba(253,224,71,0.95)",
+      bar: "#facc15",
+      label: "MID",
     };
   return {
-    dot: "#818cf8",
-    bg: "rgba(99,102,241,0.12)",
-    border: "rgba(99,102,241,0.25)",
-    text: "rgba(165,180,252,0.9)",
-    label: "Low",
+    bg: "rgba(99,102,241,0.14)",
+    border: "rgba(99,102,241,0.30)",
+    text: "rgba(165,180,252,0.95)",
+    bar: "#818cf8",
+    label: "LOW",
   };
 }
-
-// ─── CONTRACT HELPERS ─────────────────────────────────────────────────────────
 
 async function getReadContract() {
   const { ethers } = await import("ethers");
@@ -237,8 +211,6 @@ async function getWriteContract() {
   return new ethers.Contract(PROXY, PREDICT_ABI, signer);
 }
 
-// ─── COUNTDOWN HOOK ───────────────────────────────────────────────────────────
-
 function useCountdown(endTime: bigint | undefined): string {
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -248,8 +220,6 @@ function useCountdown(endTime: bigint | undefined): string {
   if (!endTime) return "Loading";
   return formatCountdown(endTime);
 }
-
-// ─── ROUND DATA ───────────────────────────────────────────────────────────────
 
 const STATUS = { OPEN: 0, RESOLVED: 1, CANCELLED: 2 };
 
@@ -281,8 +251,6 @@ type CardState = {
   amount: string;
 };
 
-// ─── METRIC CARD ──────────────────────────────────────────────────────────────
-
 function MetricCard({
   metric,
   timeframe,
@@ -299,6 +267,7 @@ function MetricCard({
   const position = range > 0 ? (current - low) / range : 0.5;
   const color = getActivityColor(position);
   const question = getDynamicQuestion(metric, current, high, low);
+  const [expanded, setExpanded] = useState(false);
 
   const [card, setCard] = useState<CardState>({
     round: null,
@@ -410,42 +379,43 @@ function MetricCard({
 
   return (
     <div
-      className="rounded-2xl flex flex-col overflow-hidden"
+      className="rounded-2xl w-full overflow-hidden"
       style={{
         background: "rgba(255,255,255,0.03)",
         border: "1px solid rgba(255,255,255,0.07)",
       }}
     >
-      {/* Header */}
-      <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-2 h-2 rounded-full shrink-0" style={{ background: color.dot }} />
-          <div className="font-semibold text-white text-sm tracking-wide leading-tight truncate">
+      {/* Top row: label + pill + value */}
+      <div className="px-6 pt-6 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <span
+            className="text-[10px] font-bold tracking-[0.18em] uppercase px-3 py-1 rounded-full shrink-0"
+            style={{
+              background: color.bg,
+              border: `1px solid ${color.border}`,
+              color: color.text,
+            }}
+          >
+            {color.label}
+          </span>
+          <span className="font-semibold text-white text-base tracking-wide truncate">
             {METRIC_LABEL[metric]}
-          </div>
+          </span>
         </div>
-        <span
-          className="inline-flex items-center gap-1.5 text-[9px] tracking-[0.2em] uppercase px-2.5 py-1 rounded-full font-semibold shrink-0"
-          style={{ background: color.bg, border: `1px solid ${color.border}`, color: color.text }}
-        >
-          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color.dot }} />
-          {color.label}
-        </span>
-      </div>
 
-      {/* Live value */}
-      <div className="px-5 pb-1 flex items-baseline gap-2">
-        <span className="text-3xl font-semibold text-white/90 tabular-nums">
-          {formatValue(metric, current)}
-        </span>
-        <span className="text-xs text-white/30 uppercase tracking-widest">
-          {METRIC_UNIT[metric]}
-        </span>
+        <div className="flex items-baseline gap-2 shrink-0">
+          <span className="text-3xl font-semibold text-white/90 tabular-nums">
+            {formatValue(metric, current)}
+          </span>
+          <span className="text-xs text-white/30 uppercase tracking-widest">
+            {METRIC_UNIT[metric]}
+          </span>
+        </div>
       </div>
 
       {/* Daily range bar */}
       {high > 0 && (
-        <div className="px-5 pt-2 pb-3">
+        <div className="px-6 pb-4">
           <div className="flex justify-between text-[9px] uppercase tracking-widest text-white/25 mb-1.5">
             <span>Low {metric === "GAS_PRICE" ? low.toFixed(2) : Math.round(low).toLocaleString()}</span>
             <span>High {metric === "GAS_PRICE" ? high.toFixed(2) : Math.round(high).toLocaleString()}</span>
@@ -455,22 +425,50 @@ function MetricCard({
               className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
               style={{
                 width: `${Math.min(100, Math.max(2, position * 100))}%`,
-                background: `linear-gradient(90deg, #818cf8, ${color.dot})`,
+                background: `linear-gradient(90deg, #818cf8, ${color.bar})`,
               }}
             />
           </div>
         </div>
       )}
 
-      {/* Dynamic question */}
-      <div className="px-5 pb-3">
-        <p className="text-white/70 text-sm leading-snug font-medium">
+      {/* Question */}
+      <div className="px-6 pb-4">
+        <p className="text-white/80 text-base leading-snug font-medium">
           {question}
         </p>
       </div>
 
+      {/* Tap to reveal description */}
+      <div className="px-6 pb-4">
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="flex items-center gap-2 text-[11px] uppercase tracking-widest transition-colors"
+          style={{ color: "rgba(255,255,255,0.28)" }}
+        >
+          <span>{expanded ? "Hide" : "What is this?"}</span>
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="none"
+            style={{
+              transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s",
+            }}
+          >
+            <path d="M1 3L5 7L9 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {expanded && (
+          <p className="mt-2.5 text-sm text-white/45 leading-relaxed">
+            {METRIC_DESCRIPTION[metric]}
+          </p>
+        )}
+      </div>
+
       {/* Pool split */}
-      <div className="px-5 pb-3">
+      <div className="px-6 pb-4">
         <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/30 mb-1.5">
           <span>Higher {higherPct}%</span>
           <span>Lower {lowerPct}%</span>
@@ -487,7 +485,7 @@ function MetricCard({
       </div>
 
       {/* Status row */}
-      <div className="px-5 pb-4 flex items-center justify-between gap-2">
+      <div className="px-6 pb-4 flex items-center justify-between gap-2">
         <div className="text-[10px] uppercase tracking-widest text-white/30">
           {card.loading
             ? "Loading"
@@ -507,7 +505,7 @@ function MetricCard({
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }} />
 
       {/* Actions */}
-      <div className="px-5 py-4 flex flex-col gap-3">
+      <div className="px-6 py-5 flex flex-col gap-3">
         {card.txError && (
           <div className="text-xs text-red-400/80 leading-snug">{card.txError}</div>
         )}
@@ -519,7 +517,7 @@ function MetricCard({
           <button
             onClick={handleClaim}
             disabled={card.claiming}
-            className="w-full py-2.5 rounded-xl text-sm font-semibold tracking-wide transition-all"
+            className="w-full py-3 rounded-xl text-sm font-semibold tracking-wide transition-all"
             style={{
               background: card.claiming ? "rgba(52,211,153,0.10)" : "rgba(52,211,153,0.15)",
               border: "1px solid rgba(52,211,153,0.30)",
@@ -539,14 +537,14 @@ function MetricCard({
               onChange={(e) =>
                 setCard((c) => ({ ...c, amount: e.target.value, txError: null }))
               }
-              className="w-full bg-transparent rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 outline-none"
+              className="w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none"
               style={{ border: "1px solid rgba(255,255,255,0.10)" }}
             />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => handleStake(0)}
                 disabled={card.staking}
-                className="py-2.5 rounded-xl text-sm font-semibold tracking-wide transition-all"
+                className="py-3 rounded-xl text-sm font-semibold tracking-wide transition-all"
                 style={{
                   background: card.staking ? "rgba(52,211,153,0.08)" : "rgba(52,211,153,0.12)",
                   border: "1px solid rgba(52,211,153,0.25)",
@@ -559,7 +557,7 @@ function MetricCard({
               <button
                 onClick={() => handleStake(1)}
                 disabled={card.staking}
-                className="py-2.5 rounded-xl text-sm font-semibold tracking-wide transition-all"
+                className="py-3 rounded-xl text-sm font-semibold tracking-wide transition-all"
                 style={{
                   background: card.staking ? "rgba(239,68,68,0.08)" : "rgba(239,68,68,0.12)",
                   border: "1px solid rgba(239,68,68,0.22)",
@@ -591,8 +589,6 @@ function MetricCard({
     </div>
   );
 }
-
-// ─── PAGE ─────────────────────────────────────────────────────────────────────
 
 function PredictPage() {
   const [timeframe, setTimeframe] = useState<0 | 1>(0);
@@ -643,7 +639,7 @@ function PredictPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="flex flex-col gap-4">
           {ACTIVE_METRICS.map((metric) => (
             <MetricCard
               key={`${metric}-${timeframe}`}
@@ -663,4 +659,4 @@ function PredictPage() {
       </div>
     </Layout>
   );
-                  }
+}
