@@ -4,7 +4,7 @@ import Layout from "@/components/Layout";
 import TradingChart from "@/components/TradingChart";
 import { MARKET_UNITS, useMarket } from "@/lib/markets";
 import type { Market } from "@/lib/positions";
-import { closePosition, openPosition, pnl, usePositions } from "@/lib/positions";
+import { closePosition, openPosition, pnl, usePositions, ethToCft } from "@/lib/positions";
 import { connectWallet, useWallet, shortAddr } from "@/lib/wallet";
 
 export const Route = createFileRoute("/trade")({
@@ -37,6 +37,13 @@ function TradePage() {
   const { open } = usePositions(wallet);
 
   const sizeNum = Number(size) || 0;
+
+  const cftPreview = useMemo(() => {
+    if (!m.current || sizeNum <= 0) return 0;
+    const fee = sizeNum * 0.003;
+    const collateral = sizeNum - fee;
+    return ethToCft(collateral, m.current);
+  }, [sizeNum, m.current]);
 
   const liquidationPrice = useMemo(() => {
     if (!m.current) return null;
@@ -256,7 +263,7 @@ function TradePage() {
               ))}
             </div>
 
-            {/* Collateral */}
+            {/* Collateral input */}
             <label className="block mt-7 text-[10px] tracking-[0.3em] text-white/50 uppercase">
               Collateral (ETH)
             </label>
@@ -268,6 +275,16 @@ function TradePage() {
               step="0.001"
               className="mt-2 w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-lg tabular-nums focus:outline-none focus:border-white/30"
             />
+
+            {/* CFT preview */}
+            {cftPreview > 0 && (
+              <div className="mt-3 flex items-center justify-between px-4 py-3 rounded-lg bg-white/5 border border-white/10">
+                <span className="text-[11px] tracking-[0.2em] text-white/50 uppercase">You receive</span>
+                <span className="text-white tabular-nums text-sm font-semibold">
+                  {cftPreview.toFixed(2)} CFT
+                </span>
+              </div>
+            )}
 
             {/* Position details */}
             <div className="mt-6 space-y-3 text-sm">
@@ -363,7 +380,7 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
             <th className="text-left px-6 py-4">Market</th>
             <th className="text-left px-6 py-4">Direction</th>
             <th className="text-left px-6 py-4">Leverage</th>
-            <th className="text-right px-6 py-4">Collateral</th>
+            <th className="text-right px-6 py-4">CFT</th>
             <th className="text-right px-6 py-4">Entry</th>
             <th className="text-right px-6 py-4">Liq. Price</th>
             <th className="text-right px-6 py-4">Current</th>
@@ -388,7 +405,7 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
                 </td>
                 <td className="px-6 py-4 text-white/70">{p.leverage}×</td>
                 <td className="px-6 py-4 text-right text-white tabular-nums">
-                  {p.collateral.toFixed(4)} ETH
+                  {p.cftMinted.toFixed(2)} CFT
                 </td>
                 <td className="px-6 py-4 text-right text-white/80 tabular-nums">
                   {p.entryPrice.toFixed(4)}
@@ -416,4 +433,4 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
       </table>
     </div>
   );
-}
+    }
