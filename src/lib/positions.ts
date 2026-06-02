@@ -28,6 +28,8 @@ const ABI = [
 const MARKET_INDEX: Record<Market, number> = { GAS: 0, TXS_PER_BLOCK: 2 };
 const INDEX_MARKET: Record<number, Market> = { 0: "GAS", 2: "TXS_PER_BLOCK" };
 
+const LEVERAGE_ENUM: Record<2 | 5, number> = { 2: 0, 5: 1 };
+
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
 
@@ -52,9 +54,12 @@ function writeLevMap(v: Record<string, 2 | 5>) {
   localStorage.setItem(LEV_KEY, JSON.stringify(v));
 }
 
+// CFT preview: mirrors contract formula but in float space.
+// Contract does: (collateral * 1e18) / entryPrice where entryPrice is 1e18-scaled.
+// Frontend entryPrice is raw (e.g. 3.0078 gwei), so preview = collateralEth / entryPrice.
 export function ethToCft(collateralEth: number, entryPrice: number): number {
   if (!entryPrice || entryPrice === 0) return 0;
-  return (collateralEth * 1e18) / entryPrice;
+  return collateralEth / entryPrice;
 }
 
 export async function openPosition(
@@ -70,11 +75,12 @@ export async function openPosition(
 
   const marketIndex = MARKET_INDEX[market];
   const directionIndex = direction === "LONG" ? 0 : 1;
+  const leverageEnum = LEVERAGE_ENUM[leverage];
   const value = ethers.parseEther(collateralEth.toFixed(6));
 
   const gasLimit = leverage === 5 ? 500000 : 300000;
 
-  const tx = await contract.openPosition(marketIndex, directionIndex, leverage, {
+  const tx = await contract.openPosition(marketIndex, directionIndex, leverageEnum, {
     value,
     gasLimit,
   });
