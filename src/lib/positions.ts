@@ -28,8 +28,6 @@ const ABI = [
 const MARKET_INDEX: Record<Market, number> = { GAS: 0, TXS_PER_BLOCK: 2 };
 const INDEX_MARKET: Record<number, Market> = { 0: "GAS", 2: "TXS_PER_BLOCK" };
 
-const LEVERAGE_ENUM: Record<2 | 5, number> = { 2: 0, 5: 1 };
-
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
 
@@ -75,12 +73,11 @@ export async function openPosition(
 
   const marketIndex = MARKET_INDEX[market];
   const directionIndex = direction === "LONG" ? 0 : 1;
-  const leverageEnum = LEVERAGE_ENUM[leverage];
   const value = ethers.parseEther(collateralEth.toFixed(6));
 
   const gasLimit = leverage === 5 ? 500000 : 300000;
 
-  const tx = await contract.openPosition(marketIndex, directionIndex, leverageEnum, {
+  const tx = await contract.openPosition(marketIndex, directionIndex, leverage, {
     value,
     gasLimit,
   });
@@ -206,4 +203,4 @@ export function pnl(p: Position, currentPrice: number): number {
     ? currentPrice - p.entryPrice
     : p.entryPrice - currentPrice;
   return (diff / p.entryPrice) * p.collateral * p.leverage;
-  }
+                                              }
