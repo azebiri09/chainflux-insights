@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Layout from "@/components/Layout";
 import { useWallet, connectWallet } from "@/lib/wallet";
 
@@ -54,6 +54,83 @@ const METRIC_DESCRIPTION: Record<ActiveMetric, string> = {
     "How busy each Ethereum block is right now. High transaction counts mean the network is under pressure. Low counts mean things are calm. Which way is it heading?",
 };
 
+const QUESTION_BANK: Record<ActiveMetric, { bottom: string[]; middle: string[]; top: string[] }> = {
+  GAS_PRICE: {
+    bottom: [
+      "Will gas rebound in {t}?",
+      "Will gas recover in {t}?",
+      "Will gas move higher in {t}?",
+    ],
+    middle: [
+      "Will gas be higher in {t}?",
+      "Will gas move higher in {t}?",
+      "Will gas trend higher in {t}?",
+    ],
+    top: [
+      "Will gas continue higher in {t}?",
+      "Will gas stay higher in {t}?",
+      "Will gas move higher in {t}?",
+    ],
+  },
+  TXS_PER_BLOCK: {
+    bottom: [
+      "Will transaction activity rebound in {t}?",
+      "Will transaction activity recover in {t}?",
+      "Will transaction activity move higher in {t}?",
+    ],
+    middle: [
+      "Will transactions per block be higher in {t}?",
+      "Will transaction activity move higher in {t}?",
+      "Will transaction activity trend higher in {t}?",
+    ],
+    top: [
+      "Will transaction activity continue higher in {t}?",
+      "Will transaction activity stay higher in {t}?",
+      "Will transaction activity move higher in {t}?",
+    ],
+  },
+  ACTIVE_ADDRESSES: {
+    bottom: [
+      "Will network activity rebound in {t}?",
+      "Will network activity recover in {t}?",
+      "Will network activity move higher in {t}?",
+    ],
+    middle: [
+      "Will active addresses be higher in {t}?",
+      "Will network activity move higher in {t}?",
+      "Will network activity trend higher in {t}?",
+    ],
+    top: [
+      "Will active addresses continue higher in {t}?",
+      "Will active addresses stay higher in {t}?",
+      "Will active addresses move higher in {t}?",
+    ],
+  },
+};
+
+function getLockedQuestion(
+  metric: ActiveMetric,
+  roundId: bigint | undefined,
+  position: number,
+  timeframe: 0 | 1
+): string {
+  const timeLabel = timeframe === 0 ? "1 hour" : "24 hours";
+  const bank = QUESTION_BANK[metric];
+  const pool =
+    position <= 0.2 ? bank.bottom : position >= 0.8 ? bank.top : bank.middle;
+
+  const lastKey = `cfq_last_${metric}`;
+  let seed = roundId ? Number(roundId % BigInt(1000)) : Math.floor(Math.random() * 1000);
+  const lastUsed = localStorage.getItem(lastKey);
+  let idx = seed % pool.length;
+  if (pool[idx] === lastUsed && pool.length > 1) {
+    idx = (idx + 1) % pool.length;
+  }
+  const question = pool[idx];
+  localStorage.setItem(lastKey, question);
+  return question.replace("{t}", timeLabel);
+}
+
 type FeedData = {
   ACTIVE_ADDRESSES: number;
   ACTIVE_DAILY_HIGH: number;
@@ -107,32 +184,6 @@ function getMetricValues(metric: ActiveMetric, feed: FeedData) {
       return { current: feed.GAS, high: feed.GAS_DAILY_HIGH, low: feed.GAS_DAILY_LOW };
     case "TXS_PER_BLOCK":
       return { current: feed.TXS_PER_BLOCK, high: feed.TXS_DAILY_HIGH, low: feed.TXS_DAILY_LOW };
-  }
-}
-
-function getDynamicQuestion(metric: ActiveMetric, current: number, high: number, low: number): string {
-  if (high === 0) {
-    switch (metric) {
-      case "ACTIVE_ADDRESSES": return "Will active addresses increase?";
-      case "GAS_PRICE": return "Will gas be higher in 1 hour?";
-      case "TXS_PER_BLOCK": return "Will transactions per block increase?";
-    }
-  }
-  const range = high - low;
-  const position = range > 0 ? (current - low) / range : 0.5;
-  switch (metric) {
-    case "ACTIVE_ADDRESSES":
-      if (position >= 0.8) return "Will active addresses reach today's high?";
-      if (position <= 0.2) return "Will active addresses rise by more than 10%?";
-      return "Will active addresses increase?";
-    case "GAS_PRICE":
-      if (position >= 0.8) return "Will gas reach today's high?";
-      if (position <= 0.2) return "Will gas rise by more than 10%?";
-      return "Will gas be higher in 1 hour?";
-    case "TXS_PER_BLOCK":
-      if (position >= 0.8) return "Will transaction activity reach today's high?";
-      if (position <= 0.2) return "Will transactions rise by more than 5%?";
-      return "Will transactions per block increase?";
   }
 }
 
@@ -266,7 +317,6 @@ function MetricCard({
   const range = high - low;
   const position = range > 0 ? (current - low) / range : 0.5;
   const color = getActivityColor(position);
-  const question = getDynamicQuestion(metric, current, high, low);
   const [expanded, setExpanded] = useState(false);
 
   const [card, setCard] = useState<CardState>({
@@ -279,6 +329,17 @@ function MetricCard({
     txSuccess: null,
     amount: "",
   });
+
+  // Lock question to round ID — recalculates only when round ID changes
+  const questionRef = useRef<string>("");
+  const lastRoundIdRef = useRef<string>("");
+
+  const roundIdStr = card.round?.roundId?.toString() ?? "";
+  if (roundIdStr !== lastRoundIdRef.current) {
+    lastRoundIdRef.current = roundIdStr;
+    questionRef.current = getLockedQuestion(metric, card.round?.roundId, position, timeframe);
+  }
+  const question = questionRef.current || getLockedQuestion(metric, undefined, position, timeframe);
 
   const countdown = useCountdown(card.round?.endTime);
 
@@ -377,6 +438,8 @@ function MetricCard({
     !card.userStake.claimed;
   const totalPool = card.round ? card.round.higherPool + card.round.lowerPool : 0n;
 
+  const hasUserStake = card.userStake && card.userStake.amount > 0n;
+
   return (
     <div
       className="rounded-2xl w-full overflow-hidden"
@@ -385,7 +448,7 @@ function MetricCard({
         border: "1px solid rgba(255,255,255,0.07)",
       }}
     >
-      {/* Top row: label + pill + value */}
+      {/* Top row: pill badge + label + value */}
       <div className="px-6 pt-6 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <span
@@ -420,7 +483,7 @@ function MetricCard({
             <span>Low {metric === "GAS_PRICE" ? low.toFixed(2) : Math.round(low).toLocaleString()}</span>
             <span>High {metric === "GAS_PRICE" ? high.toFixed(2) : Math.round(high).toLocaleString()}</span>
           </div>
-          <div className="relative h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+          <div className="relative h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
             <div
               className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
               style={{
@@ -513,6 +576,22 @@ function MetricCard({
           <div className="text-xs text-emerald-400/80 leading-snug">{card.txSuccess}</div>
         )}
 
+        {/* User position — always visible when stake exists */}
+        {hasUserStake && (
+          <div
+            className="flex items-center justify-between px-4 py-3 rounded-xl"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <span className="text-[11px] uppercase tracking-widest text-white/40">Your position</span>
+            <span className="text-sm font-semibold" style={{ color: card.userStake!.direction === 0 ? "#6ee7b7" : "#fca5a5" }}>
+              {formatEth(card.userStake!.amount)} ETH on {card.userStake!.direction === 0 ? "Higher" : "Lower"}
+            </span>
+          </div>
+        )}
+
         {canClaim ? (
           <button
             onClick={handleClaim}
@@ -569,20 +648,13 @@ function MetricCard({
               </button>
             </div>
           </>
-        ) : isResolved && card.userStake && card.userStake.amount > 0n ? (
+        ) : isResolved && hasUserStake ? (
           <div className="text-xs text-white/30 text-center py-1">
-            {card.userStake.claimed ? "Already claimed" : "Round resolved. No winnings."}
+            {card.userStake!.claimed ? "Already claimed" : "Round resolved. No winnings."}
           </div>
         ) : (
           <div className="text-xs text-white/20 text-center py-1">
             {card.loading ? "" : "Round not active"}
-          </div>
-        )}
-
-        {card.userStake && card.userStake.amount > 0n && isOpen && (
-          <div className="text-[10px] text-white/30 text-center">
-            Your stake: {formatEth(card.userStake.amount)} ETH on{" "}
-            {card.userStake.direction === 0 ? "Higher" : "Lower"}
           </div>
         )}
       </div>
@@ -648,13 +720,6 @@ function PredictPage() {
               feed={feed}
             />
           ))}
-        </div>
-
-        <div className="mt-10 flex flex-wrap gap-6 text-[11px] text-white/30 uppercase tracking-widest">
-          <span>Min stake 0.0001 ETH</span>
-          <span>2% protocol fee</span>
-          <span>Winners split the pool</span>
-          <span>Rounds managed by keeper</span>
         </div>
       </div>
     </Layout>
