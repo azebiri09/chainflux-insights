@@ -24,8 +24,8 @@ const ABI = [
   "function getMarket(uint8 m) external view returns (uint256 price, uint256 updatedAt, uint256 longOI, uint256 shortOI)"
 ];
 
-const MARKET_INDEX: Record<Market, number> = { GAS: 0, ACTIVE_ADDRESSES: 1, TXS_PER_BLOCK: 2 };
-const INDEX_MARKET: Record<number, Market> = { 0: "GAS", 1: "ACTIVE_ADDRESSES", 2: "TXS_PER_BLOCK" };
+const MARKET_INDEX: Record<Market, number> = { GAS: 0, TXS_PER_BLOCK: 2 };
+const INDEX_MARKET: Record<number, Market> = { 0: "GAS", 2: "TXS_PER_BLOCK" };
 
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
