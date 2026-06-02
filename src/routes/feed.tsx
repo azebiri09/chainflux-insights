@@ -109,19 +109,19 @@ function StateTag({ state }: { state: "low" | "medium" | "high" }) {
   const c = STATE_COLORS[state];
   return (
     <span
-      className="inline-flex items-center gap-1.5 text-[9px] tracking-[0.2em] uppercase px-2.5 py-1 rounded-full font-semibold shrink-0"
+      className="inline-flex items-center text-[9px] tracking-[0.2em] uppercase px-2.5 py-1 rounded-full font-semibold shrink-0"
       style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text }}
     >
-      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c.dot }} />
       {state}
     </span>
   );
 }
 
-function ExplainRow({ label, text, highlight }: { label: string; text: string; highlight?: boolean }) {
+function ExplainRow({ label: labelText, sublabel, text, highlight }: { label: string; sublabel: string; text: string; highlight?: boolean }) {
   return (
-    <div className="flex flex-col gap-1">
-      <div className="text-[9px] tracking-[0.25em] uppercase font-medium text-white/30">{label}</div>
+    <div className="flex flex-col gap-1.5">
+      <div className="text-[9px] tracking-[0.25em] uppercase font-semibold text-white/55">{labelText}</div>
+      <div className="text-[10px] tracking-widest uppercase text-white/25 mb-0.5">{sublabel}</div>
       <div
         className="text-sm leading-relaxed"
         style={{ color: highlight ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.50)" }}
@@ -160,19 +160,17 @@ function FeedRow({
     <div
       className="rounded-2xl overflow-hidden cursor-pointer select-none transition-all duration-200"
       style={{
-        background: open ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.03)",
+        background: open ? "rgba(10,18,40,0.95)" : "rgba(8,14,32,0.85)",
         border: `1px solid ${open ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)"}`,
       }}
       onClick={() => setOpen((o) => !o)}
     >
       <div className="flex items-center gap-3 px-4 sm:px-6 py-4 sm:py-5">
-        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: c.dot }} />
-
         <div className="flex-1 min-w-0">
           <div className="text-white font-semibold text-sm tracking-wide truncate">{label}</div>
           {(dailyHigh ?? 0) > 0 && (
-            <div className="mt-1.5 flex items-center gap-2">
-              <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+            <div className="mt-2 flex items-center gap-3">
+              <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{
@@ -219,15 +217,24 @@ function FeedRow({
           className="px-4 sm:px-6 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-5"
           style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
         >
-          <div className="pt-5"><ExplainRow label="What is happening" text={explanation.happening} /></div>
-          <div className="pt-5"><ExplainRow label="Why" text={explanation.why} /></div>
-          <div className="pt-5"><ExplainRow label="What it means" text={explanation.means} /></div>
-          <div className="pt-5"><ExplainRow label="What to do" text={explanation.action} highlight /></div>
+          <div className="pt-5">
+            <ExplainRow label="What Is Happening?" sublabel="Describe the on-chain activity" text={explanation.happening} />
+          </div>
+          <div className="pt-5">
+            <ExplainRow label="Why Is This Happening?" sublabel="Explain possible causes" text={explanation.why} />
+          </div>
+          <div className="pt-5">
+            <ExplainRow label="What Does It Mean?" sublabel="Significance and market context" text={explanation.means} />
+          </div>
+          <div className="pt-5">
+            <ExplainRow label="Possible Reactions" sublabel="" text={explanation.action} highlight />
+          </div>
         </div>
       )}
     </div>
   );
-  }
+}
+
 function FeedPage() {
   const feed = useNetworkFeed();
   const gas = useMarket("GAS");
@@ -282,4 +289,4 @@ function FeedPage() {
       </div>
     </Layout>
   );
-}
+      }
