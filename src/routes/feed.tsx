@@ -1,7 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Layout from "@/components/Layout";
 import { useNetworkFeed, useMarket, getMetricState } from "@/lib/markets";
+import {
+  Fire,
+  ArrowsLeftRight,
+  Users,
+  Pulse,
+  ChartBar,
+  Lightning,
+  Diamond,
+} from "@phosphor-icons/react";
 
 export const Route = createFileRoute("/feed")({
   component: FeedPage,
@@ -13,19 +22,25 @@ const STATE_COLORS = {
     bg: "rgba(99,102,241,0.12)",
     border: "rgba(99,102,241,0.25)",
     text: "rgba(165,180,252,0.9)",
-    dot: "#818cf8",
+    bar: "#818cf8",
+    iconBg: "rgba(99,102,241,0.18)",
+    iconColor: "#a5b4fc",
   },
   medium: {
     bg: "rgba(234,179,8,0.10)",
     border: "rgba(234,179,8,0.22)",
     text: "rgba(253,224,71,0.9)",
-    dot: "#facc15",
+    bar: "#facc15",
+    iconBg: "rgba(234,179,8,0.15)",
+    iconColor: "#fde047",
   },
   high: {
     bg: "rgba(16,185,129,0.10)",
     border: "rgba(16,185,129,0.22)",
     text: "rgba(110,231,183,0.9)",
-    dot: "#34d399",
+    bar: "#34d399",
+    iconBg: "rgba(16,185,129,0.15)",
+    iconColor: "#6ee7b7",
   },
 };
 
@@ -99,6 +114,19 @@ const EXPLANATIONS: Record<string, Record<"low" | "medium" | "high", Explanation
   },
 };
 
+const METRIC_ICONS: Record<string, React.ReactNode> = {
+  GAS: <Fire size={22} weight="duotone" />,
+  TXS_PER_BLOCK: <ArrowsLeftRight size={22} weight="duotone" />,
+  ACTIVE_ADDRESSES: <Users size={22} weight="duotone" />,
+};
+
+const EXPLAIN_ICONS = [
+  <Pulse size={18} weight="duotone" />,
+  <ChartBar size={18} weight="duotone" />,
+  <Diamond size={18} weight="duotone" />,
+  <Lightning size={18} weight="duotone" />,
+];
+
 function formatValue(metric: string, value: number): string {
   if (value === 0) return "Loading";
   if (metric === "GAS") return value.toFixed(4);
@@ -117,16 +145,82 @@ function StateTag({ state }: { state: "low" | "medium" | "high" }) {
   );
 }
 
-function ExplainRow({ label: labelText, sublabel, text, highlight }: { label: string; sublabel: string; text: string; highlight?: boolean }) {
+// Mini sparkline chart using SVG
+function MiniChart({ values, color }: { values: number[]; color: string }) {
+  if (values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const w = 80;
+  const h = 32;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * w;
+    const y = h - ((v - min) / range) * h;
+    return `${x},${y}`;
+  });
+  const polyline = pts.join(" ");
+  const areaPath = `M${pts[0]} L${pts.join(" L")} L${w},${h} L0,${h} Z`;
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="text-[9px] tracking-[0.25em] uppercase font-semibold text-white/55">{labelText}</div>
-      <div className="text-[10px] tracking-widest uppercase text-white/25 mb-0.5">{sublabel}</div>
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" className="shrink-0 opacity-70">
+      <defs>
+        <linearGradient id={`grad-${color.replace("#", "")}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill={`url(#grad-${color.replace("#", "")})`} />
+      <polyline points={polyline} stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function useRollingValues(value: number, maxLen = 30) {
+  const historyRef = useRef<number[]>([]);
+  const [history, setHistory] = useState<number[]>([]);
+  useEffect(() => {
+    if (value === 0) return;
+    historyRef.current = [...historyRef.current.slice(-(maxLen - 1)), value];
+    setHistory([...historyRef.current]);
+  }, [value]);
+  return history;
+}
+
+function ExplainCell({
+  label,
+  sublabel,
+  text,
+  icon,
+  highlight,
+}: {
+  label: string;
+  sublabel: string;
+  text: string;
+  icon: React.ReactNode;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className="flex gap-3 p-4 rounded-xl"
+      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+    >
       <div
-        className="text-sm leading-relaxed"
-        style={{ color: highlight ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.50)" }}
+        className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center mt-0.5"
+        style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.45)" }}
       >
-        {text}
+        {icon}
+      </div>
+      <div className="flex flex-col gap-1 min-w-0">
+        <div className="text-[9px] tracking-[0.22em] uppercase font-semibold text-white/50">{label}</div>
+        {sublabel && (
+          <div className="text-[9px] tracking-wider uppercase text-white/20">{sublabel}</div>
+        )}
+        <div
+          className="text-sm leading-relaxed mt-0.5"
+          style={{ color: highlight ? "rgba(255,255,255,0.82)" : "rgba(255,255,255,0.48)" }}
+        >
+          {text}
+        </div>
       </div>
     </div>
   );
@@ -151,6 +245,7 @@ function FeedRow({
   const state = getMetricState(metricKey, value);
   const c = STATE_COLORS[state];
   const explanation = EXPLANATIONS[metricKey]?.[state];
+  const history = useRollingValues(value);
 
   const range = (dailyHigh ?? 0) - (dailyLow ?? 0);
   const position = range > 0 ? ((value - (dailyLow ?? 0)) / range) * 100 : 50;
@@ -160,26 +255,36 @@ function FeedRow({
     <div
       className="rounded-2xl overflow-hidden cursor-pointer select-none transition-all duration-200"
       style={{
-        background: open ? "rgba(10,18,40,0.95)" : "rgba(8,14,32,0.85)",
-        border: `1px solid ${open ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)"}`,
+        background: open ? "rgba(10,16,38,0.98)" : "rgba(7,12,28,0.92)",
+        border: `1px solid ${open ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.07)"}`,
       }}
       onClick={() => setOpen((o) => !o)}
     >
-      <div className="flex items-center gap-3 px-4 sm:px-6 py-4 sm:py-5">
+      {/* Main row */}
+      <div className="flex items-center gap-4 px-5 sm:px-6 py-5">
+        {/* Metric icon */}
+        <div
+          className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center"
+          style={{ background: c.iconBg, color: c.iconColor }}
+        >
+          {METRIC_ICONS[metricKey]}
+        </div>
+
+        {/* Label + range bar */}
         <div className="flex-1 min-w-0">
-          <div className="text-white font-semibold text-sm tracking-wide truncate">{label}</div>
+          <div className="text-white font-semibold text-sm tracking-wide truncate mb-0.5">{label}</div>
           {(dailyHigh ?? 0) > 0 && (
-            <div className="mt-2 flex items-center gap-3">
-              <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+            <div className="flex items-center gap-2 mt-1.5">
+              <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{
                     width: `${clampedPosition}%`,
-                    background: `linear-gradient(90deg, #818cf8, ${c.dot})`,
+                    background: `linear-gradient(90deg, #818cf8, ${c.bar})`,
                   }}
                 />
               </div>
-              <span className="text-[9px] text-white/25 tabular-nums shrink-0">
+              <span className="text-[9px] text-white/22 tabular-nums shrink-0">
                 {metricKey === "GAS"
                   ? `${(dailyLow ?? 0).toFixed(2)} / ${(dailyHigh ?? 0).toFixed(2)}`
                   : `${Math.round(dailyLow ?? 0).toLocaleString()} / ${Math.round(dailyHigh ?? 0).toLocaleString()}`}
@@ -188,11 +293,16 @@ function FeedRow({
           )}
         </div>
 
+        {/* Sparkline */}
+        <MiniChart values={history} color={c.bar} />
+
+        {/* State tag */}
         <StateTag state={state} />
 
-        <div className="text-right shrink-0 ml-2">
+        {/* Value */}
+        <div className="text-right shrink-0 ml-1">
           <div
-            className="text-lg sm:text-xl font-semibold tabular-nums tracking-tight"
+            className="text-xl sm:text-2xl font-semibold tabular-nums tracking-tight"
             style={{ color: value === 0 ? "rgba(255,255,255,0.20)" : "rgba(255,255,255,0.92)" }}
           >
             {formatValue(metricKey, value)}
@@ -202,6 +312,7 @@ function FeedRow({
           )}
         </div>
 
+        {/* Chevron */}
         <div
           className="shrink-0 text-white/25 transition-transform duration-300 ml-1"
           style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
@@ -212,25 +323,97 @@ function FeedRow({
         </div>
       </div>
 
+      {/* Expanded explanation */}
       {open && explanation && (
         <div
-          className="px-4 sm:px-6 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-5"
+          className="px-5 sm:px-6 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-3"
           style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="pt-5">
-            <ExplainRow label="What Is Happening?" sublabel="Describe the on-chain activity" text={explanation.happening} />
+          <div className="pt-4">
+            <ExplainCell
+              label="What Is Happening?"
+              sublabel="Describe the on-chain activity"
+              text={explanation.happening}
+              icon={EXPLAIN_ICONS[0]}
+            />
           </div>
-          <div className="pt-5">
-            <ExplainRow label="Why Is This Happening?" sublabel="Explain possible causes" text={explanation.why} />
+          <div className="pt-4">
+            <ExplainCell
+              label="Why Is This Happening?"
+              sublabel="Explain possible causes"
+              text={explanation.why}
+              icon={EXPLAIN_ICONS[1]}
+            />
           </div>
-          <div className="pt-5">
-            <ExplainRow label="What Does It Mean?" sublabel="Significance and market context" text={explanation.means} />
+          <div className="pt-0 sm:pt-0">
+            <ExplainCell
+              label="What Does It Mean?"
+              sublabel="Significance and market context"
+              text={explanation.means}
+              icon={EXPLAIN_ICONS[2]}
+            />
           </div>
-          <div className="pt-5">
-            <ExplainRow label="Possible Reactions" sublabel="" text={explanation.action} highlight />
+          <div className="pt-0 sm:pt-0">
+            <ExplainCell
+              label="Possible Reactions"
+              sublabel=""
+              text={explanation.action}
+              icon={EXPLAIN_ICONS[3]}
+              highlight
+            />
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Animated ETH logo
+function EthHero() {
+  return (
+    <div className="absolute right-0 top-0 w-72 h-72 sm:w-96 sm:h-96 pointer-events-none select-none flex items-center justify-center"
+      style={{ opacity: 0.18 }}
+    >
+      <style>{`
+        @keyframes eth-float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          33% { transform: translateY(-14px) rotate(3deg); }
+          66% { transform: translateY(-6px) rotate(-2deg); }
+        }
+        @keyframes eth-spin-slow {
+          0% { transform: rotateY(0deg); }
+          100% { transform: rotateY(360deg); }
+        }
+        @keyframes eth-pulse-ring {
+          0%, 100% { opacity: 0.15; transform: scale(1); }
+          50% { opacity: 0.05; transform: scale(1.08); }
+        }
+        .eth-float { animation: eth-float 6s ease-in-out infinite; }
+        .eth-ring { animation: eth-pulse-ring 4s ease-in-out infinite; }
+      `}</style>
+
+      <div className="relative eth-float">
+        {/* Outer ring */}
+        <div
+          className="eth-ring absolute inset-0 rounded-full"
+          style={{ border: "1px solid rgba(139,92,246,0.4)", margin: "-24px" }}
+        />
+        {/* Inner ring */}
+        <div
+          className="eth-ring absolute inset-0 rounded-full"
+          style={{ border: "1px solid rgba(99,102,241,0.3)", margin: "-8px", animationDelay: "1s" }}
+        />
+
+        {/* ETH Diamond */}
+        <svg width="140" height="140" viewBox="0 0 140 140" fill="none">
+          <polygon points="70,10 110,70 70,90 30,70" fill="rgba(139,92,246,0.55)" />
+          <polygon points="70,90 110,70 70,130" fill="rgba(99,102,241,0.40)" />
+          <polygon points="70,90 30,70 70,130" fill="rgba(167,139,250,0.30)" />
+          <polygon points="70,10 110,70 70,70" fill="rgba(196,181,253,0.20)" />
+          <polygon points="70,10 30,70 70,70" fill="rgba(139,92,246,0.35)" />
+        </svg>
+      </div>
     </div>
   );
 }
@@ -251,16 +434,31 @@ function FeedPage() {
       />
 
       <div className="relative z-10 pt-32 pb-24 mx-auto max-w-7xl px-4 sm:px-8">
-        <div className="mb-10">
-          <h1 className="text-4xl sm:text-5xl font-semibold text-white tracking-tight leading-tight mb-4">
-            Live intelligence for the Ethereum network.
-          </h1>
-          <p className="text-white/45 text-base leading-relaxed max-w-2xl">
-            Follow the metrics that drive on-chain activity and uncover shifts before they become obvious.
-          </p>
+        {/* Hero */}
+        <div className="relative mb-12 overflow-hidden">
+          <EthHero />
+          <div className="relative z-10">
+            <div
+              className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] px-3 py-1.5 rounded-full mb-6"
+              style={{
+                background: "rgba(99,102,241,0.10)",
+                border: "1px solid rgba(99,102,241,0.20)",
+                color: "rgba(165,180,252,0.7)",
+              }}
+            >
+              Live Network Intelligence
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-semibold text-white tracking-tight leading-tight mb-4">
+              Live intelligence for the Ethereum network.
+            </h1>
+            <p className="text-white/40 text-base leading-relaxed max-w-xl">
+              Follow the metrics that drive on-chain activity and uncover shifts before they become obvious.
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-col gap-2">
+        {/* Feed rows */}
+        <div className="flex flex-col gap-3">
           <FeedRow
             label="Gas Price"
             unit="gwei"
