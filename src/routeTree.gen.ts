@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TradeRouteImport } from './routes/trade'
+import { Route as PredictRouteImport } from './routes/predict'
 import { Route as PortfolioRouteImport } from './routes/portfolio'
 import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as FeedRouteImport } from './routes/feed'
@@ -18,6 +19,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const TradeRoute = TradeRouteImport.update({
   id: '/trade',
   path: '/trade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PredictRoute = PredictRouteImport.update({
+  id: '/predict',
+  path: '/predict',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PortfolioRoute = PortfolioRouteImport.update({
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/feed': typeof FeedRoute
   '/leaderboard': typeof LeaderboardRoute
   '/portfolio': typeof PortfolioRoute
+  '/predict': typeof PredictRoute
   '/trade': typeof TradeRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/feed': typeof FeedRoute
   '/leaderboard': typeof LeaderboardRoute
   '/portfolio': typeof PortfolioRoute
+  '/predict': typeof PredictRoute
   '/trade': typeof TradeRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,28 @@ export interface FileRoutesById {
   '/feed': typeof FeedRoute
   '/leaderboard': typeof LeaderboardRoute
   '/portfolio': typeof PortfolioRoute
+  '/predict': typeof PredictRoute
   '/trade': typeof TradeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/feed' | '/leaderboard' | '/portfolio' | '/trade'
+  fullPaths:
+    | '/'
+    | '/feed'
+    | '/leaderboard'
+    | '/portfolio'
+    | '/predict'
+    | '/trade'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/feed' | '/leaderboard' | '/portfolio' | '/trade'
-  id: '__root__' | '/' | '/feed' | '/leaderboard' | '/portfolio' | '/trade'
+  to: '/' | '/feed' | '/leaderboard' | '/portfolio' | '/predict' | '/trade'
+  id:
+    | '__root__'
+    | '/'
+    | '/feed'
+    | '/leaderboard'
+    | '/portfolio'
+    | '/predict'
+    | '/trade'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +98,7 @@ export interface RootRouteChildren {
   FeedRoute: typeof FeedRoute
   LeaderboardRoute: typeof LeaderboardRoute
   PortfolioRoute: typeof PortfolioRoute
+  PredictRoute: typeof PredictRoute
   TradeRoute: typeof TradeRoute
 }
 
@@ -86,6 +109,13 @@ declare module '@tanstack/react-router' {
       path: '/trade'
       fullPath: '/trade'
       preLoaderRoute: typeof TradeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/predict': {
+      id: '/predict'
+      path: '/predict'
+      fullPath: '/predict'
+      preLoaderRoute: typeof PredictRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/portfolio': {
@@ -124,18 +154,9 @@ const rootRouteChildren: RootRouteChildren = {
   FeedRoute: FeedRoute,
   LeaderboardRoute: LeaderboardRoute,
   PortfolioRoute: PortfolioRoute,
+  PredictRoute: PredictRoute,
   TradeRoute: TradeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
