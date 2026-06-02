@@ -59,11 +59,9 @@ export function ethToCft(collateralEth: number, entryPrice: number): number {
 
 function decodeRevertReason(err: any): string {
   try {
-    // ethers v6 puts the revert data here
     const data = err?.data ?? err?.error?.data ?? err?.info?.error?.data;
     if (!data) return err?.message ?? "Unknown error";
 
-    // Standard Error(string) selector = 0x08c379a0
     if (typeof data === "string" && data.startsWith("0x08c379a0")) {
       const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
         ["string"],
@@ -72,7 +70,6 @@ function decodeRevertReason(err: any): string {
       return decoded[0];
     }
 
-    // Panic
     if (typeof data === "string" && data.startsWith("0x4e487b71")) {
       const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
         ["uint256"],
@@ -102,7 +99,6 @@ export async function openPosition(
   const directionIndex = direction === "LONG" ? 0 : 1;
   const value = ethers.parseEther(collateralEth.toFixed(6));
 
-  // First simulate the call so we get the revert reason before spending gas
   try {
     await contract.openPosition.staticCall(marketIndex, directionIndex, leverage, {
       value,
@@ -112,11 +108,10 @@ export async function openPosition(
     throw new Error(`Simulation failed: ${reason}`);
   }
 
-  // Simulation passed — send real tx
   try {
     const tx = await contract.openPosition(marketIndex, directionIndex, leverage, {
       value,
-      gasLimit: leverage === 5 ? 500000 : 300000,
+      gasLimit: leverage === 5 ? 800000 : 600000,
     });
     const receipt = await tx.wait();
 
@@ -143,7 +138,7 @@ export async function closePosition(
   const contract = new ethers.Contract(PROXY_ADDRESS, ABI, signer);
 
   const tx = await contract.closePosition(BigInt(positionId), {
-    gasLimit: 300000,
+    gasLimit: 400000,
   });
   await tx.wait();
 
@@ -242,4 +237,4 @@ export function pnl(p: Position, currentPrice: number): number {
     ? currentPrice - p.entryPrice
     : p.entryPrice - currentPrice;
   return (diff / p.entryPrice) * p.collateral * p.leverage;
-                                                    }
+                     }
