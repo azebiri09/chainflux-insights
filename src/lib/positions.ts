@@ -52,12 +52,39 @@ function writeLevMap(v: Record<string, 2 | 5>) {
   localStorage.setItem(LEV_KEY, JSON.stringify(v));
 }
 
-// CFT preview: mirrors contract formula but in float space.
-// Contract does: (collateral * 1e18) / entryPrice where entryPrice is 1e18-scaled.
-// Frontend entryPrice is raw (e.g. 3.0078 gwei), so preview = collateralEth / entryPrice.
 export function ethToCft(collateralEth: number, entryPrice: number): number {
   if (!entryPrice || entryPrice === 0) return 0;
   return collateralEth / entryPrice;
+}
+
+function decodeRevertReason(err: any): string {
+  try {
+    // ethers v6 puts the revert data here
+    const data = err?.data ?? err?.error?.data ?? err?.info?.error?.data;
+    if (!data) return err?.message ?? "Unknown error";
+
+    // Standard Error(string) selector = 0x08c379a0
+    if (typeof data === "string" && data.startsWith("0x08c379a0")) {
+      const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
+        ["string"],
+        "0x" + data.slice(10)
+      );
+      return decoded[0];
+    }
+
+    // Panic
+    if (typeof data === "string" && data.startsWith("0x4e487b71")) {
+      const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
+        ["uint256"],
+        "0x" + data.slice(10)
+      );
+      return `Panic: ${decoded[0]}`;
+    }
+
+    return `Raw revert: ${data}`;
+  } catch {
+    return err?.message ?? "Unknown error";
+  }
 }
 
 export async function openPosition(
@@ -75,22 +102,35 @@ export async function openPosition(
   const directionIndex = direction === "LONG" ? 0 : 1;
   const value = ethers.parseEther(collateralEth.toFixed(6));
 
-  const gasLimit = leverage === 5 ? 500000 : 300000;
+  // First simulate the call so we get the revert reason before spending gas
+  try {
+    await contract.openPosition.staticCall(marketIndex, directionIndex, leverage, {
+      value,
+    });
+  } catch (simErr: any) {
+    const reason = decodeRevertReason(simErr);
+    throw new Error(`Simulation failed: ${reason}`);
+  }
 
-  const tx = await contract.openPosition(marketIndex, directionIndex, leverage, {
-    value,
-    gasLimit,
-  });
-  const receipt = await tx.wait();
+  // Simulation passed — send real tx
+  try {
+    const tx = await contract.openPosition(marketIndex, directionIndex, leverage, {
+      value,
+      gasLimit: leverage === 5 ? 500000 : 300000,
+    });
+    const receipt = await tx.wait();
 
-  const address = await signer.getAddress();
-  const levMap = readLevMap();
+    const address = await signer.getAddress();
+    const levMap = readLevMap();
+    const pendingKey = `pending:${market}:${direction}:${receipt.blockNumber}`;
+    levMap[pendingKey] = leverage;
+    writeLevMap(levMap);
 
-  const pendingKey = `pending:${market}:${direction}:${receipt.blockNumber}`;
-  levMap[pendingKey] = leverage;
-  writeLevMap(levMap);
-
-  await refreshPositions(address);
+    await refreshPositions(address);
+  } catch (txErr: any) {
+    const reason = decodeRevertReason(txErr);
+    throw new Error(`Transaction failed: ${reason}`);
+  }
 }
 
 export async function closePosition(
@@ -159,7 +199,6 @@ export async function refreshPositions(address: string): Promise<void> {
     );
 
     const pendingEntries = Object.entries(levMap).filter(([k]) => k.startsWith("pending:"));
-
     if (pendingEntries.length > 0) {
       const unassigned = positions.filter((p) => !levMap[p.id]);
       pendingEntries.forEach(([pendingKey, lev], i) => {
@@ -203,4 +242,4 @@ export function pnl(p: Position, currentPrice: number): number {
     ? currentPrice - p.entryPrice
     : p.entryPrice - currentPrice;
   return (diff / p.entryPrice) * p.collateral * p.leverage;
-                                              }
+                                                    }
