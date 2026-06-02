@@ -12,6 +12,7 @@ export type Position = {
   openedAt: number;
   closedAt?: number;
   closePrice?: number;
+  cftMinted: number;
 };
 
 const PROXY_ADDRESS = "0x615d3801019D33609Eed27EB39D40AB49fa44fAF";
@@ -19,9 +20,9 @@ const PROXY_ADDRESS = "0x615d3801019D33609Eed27EB39D40AB49fa44fAF";
 const ABI = [
   "function openPosition(uint8 market, uint8 direction, uint8 leverage) external payable",
   "function closePosition(uint256 id) external",
-  "function getPosition(uint256 id) external view returns (address trader, uint8 market, uint8 direction, uint256 collateral, uint256 size, uint256 entryPrice, uint256 openedAt, uint256 cftMinted, bool open)",
+  "function getPosition(uint256 id) external view returns (tuple(address trader, uint8 market, uint8 direction, uint256 collateral, uint256 size, uint256 entryPrice, uint256 openedAt, uint256 cftMinted, bool open, uint8 leverage, uint256 liquidationPrice))",
   "function getUserPositions(address user) external view returns (uint256[])",
-  "function getMarket(uint8 m) external view returns (uint256 price, uint256 updatedAt, uint256 longOI, uint256 shortOI)"
+  "function getMarket(uint8 m) external view returns (uint256 price, uint256 updatedAt)"
 ];
 
 const MARKET_INDEX: Record<Market, number> = { GAS: 0, TXS_PER_BLOCK: 2 };
@@ -51,6 +52,11 @@ function writeLevMap(v: Record<string, 2 | 5>) {
   localStorage.setItem(LEV_KEY, JSON.stringify(v));
 }
 
+export function ethToCft(collateralEth: number, entryPrice: number): number {
+  if (!entryPrice || entryPrice === 0) return 0;
+  return (collateralEth * 1e18) / entryPrice;
+}
+
 export async function openPosition(
   market: Market,
   direction: "LONG" | "SHORT",
@@ -66,7 +72,6 @@ export async function openPosition(
   const directionIndex = direction === "LONG" ? 0 : 1;
   const value = ethers.parseEther(collateralEth.toFixed(6));
 
-  // Bug A fix: 5× needs more gas than 2×
   const gasLimit = leverage === 5 ? 500000 : 300000;
 
   const tx = await contract.openPosition(marketIndex, directionIndex, leverage, {
@@ -94,7 +99,6 @@ export async function closePosition(
   const signer = await provider.getSigner();
   const contract = new ethers.Contract(PROXY_ADDRESS, ABI, signer);
 
-  // Bug B fix: closePosition was missing gasLimit entirely
   const tx = await contract.closePosition(BigInt(positionId), {
     gasLimit: 300000,
   });
@@ -126,24 +130,31 @@ export async function refreshPositions(address: string): Promise<void> {
     await Promise.all(
       ids.map(async (id) => {
         const p = await contract.getPosition(id);
-        if (p.open) {
+        if (p[0].open !== undefined ? p[0].open : p.open) {
+          const pos = Array.isArray(p) ? p[0] : p;
           const idStr = id.toString();
-          const storedLev: 2 | 5 = levMap[idStr] ?? 2;
+          const storedLev: 2 | 5 = pos.leverage
+            ? ((Number(pos.leverage) as 2 | 5) || levMap[idStr] || 2)
+            : (levMap[idStr] ?? 2);
+
+          const entryPrice = Number(pos.entryPrice) / 1e18;
+          const collateral = Number(ethers.formatEther(pos.collateral));
+          const cftMinted = Number(pos.cftMinted) / 1e18;
 
           positions.push({
             id: idStr,
-            market: INDEX_MARKET[Number(p.market)],
-            direction: Number(p.direction) === 0 ? "LONG" : "SHORT",
+            market: INDEX_MARKET[Number(pos.market)],
+            direction: Number(pos.direction) === 0 ? "LONG" : "SHORT",
             leverage: storedLev,
-            collateral: Number(ethers.formatEther(p.collateral)),
-            entryPrice: Number(p.entryPrice) / 1e18,
-            openedAt: Number(p.openedAt) * 1000,
+            collateral,
+            entryPrice,
+            openedAt: Number(pos.openedAt) * 1000,
+            cftMinted,
           });
         }
       })
     );
 
-    const knownIds = new Set(positions.map((p) => p.id));
     const pendingEntries = Object.entries(levMap).filter(([k]) => k.startsWith("pending:"));
 
     if (pendingEntries.length > 0) {
@@ -189,4 +200,4 @@ export function pnl(p: Position, currentPrice: number): number {
     ? currentPrice - p.entryPrice
     : p.entryPrice - currentPrice;
   return (diff / p.entryPrice) * p.collateral * p.leverage;
-    }
+  }
