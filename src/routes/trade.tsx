@@ -312,7 +312,7 @@ function TradePage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-white/50">Fee (0.3%)</span>
-                <span className="text-white tabular-nums">{(sizeNum * 0.003).toFixed(4)} ETH</span>
+                <span className="text-white tabular-nums">{(sizeNum * 0.003).toFixed(6)} ETH</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-white/50">Min collateral</span>
