@@ -61,7 +61,6 @@ function decodeRevertReason(err: any): string {
   try {
     const data = err?.data ?? err?.error?.data ?? err?.info?.error?.data;
     if (!data) return err?.message ?? "Unknown error";
-
     if (typeof data === "string" && data.startsWith("0x08c379a0")) {
       const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
         ["string"],
@@ -69,7 +68,6 @@ function decodeRevertReason(err: any): string {
       );
       return decoded[0];
     }
-
     if (typeof data === "string" && data.startsWith("0x4e487b71")) {
       const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
         ["uint256"],
@@ -77,7 +75,6 @@ function decodeRevertReason(err: any): string {
       );
       return `Panic: ${decoded[0]}`;
     }
-
     return `Raw revert: ${data}`;
   } catch {
     return err?.message ?? "Unknown error";
@@ -100,9 +97,7 @@ export async function openPosition(
   const value = ethers.parseEther(collateralEth.toFixed(6));
 
   try {
-    await contract.openPosition.staticCall(marketIndex, directionIndex, leverage, {
-      value,
-    });
+    await contract.openPosition.staticCall(marketIndex, directionIndex, leverage, { value });
   } catch (simErr: any) {
     const reason = decodeRevertReason(simErr);
     throw new Error(`Simulation failed: ${reason}`);
@@ -137,9 +132,7 @@ export async function closePosition(
   const signer = await provider.getSigner();
   const contract = new ethers.Contract(PROXY_ADDRESS, ABI, signer);
 
-  const tx = await contract.closePosition(BigInt(positionId), {
-    gasLimit: 400000,
-  });
+  const tx = await contract.closePosition(BigInt(positionId), { gasLimit: 400000 });
   await tx.wait();
 
   const closed = cachedOpen.find((p) => p.id === positionId);
@@ -167,28 +160,38 @@ export async function refreshPositions(address: string): Promise<void> {
 
     await Promise.all(
       ids.map(async (id) => {
-        const p = await contract.getPosition(id);
-        if (p[0].open !== undefined ? p[0].open : p.open) {
-          const pos = Array.isArray(p) ? p[0] : p;
-          const idStr = id.toString();
-          const storedLev: 2 | 5 = pos.leverage
-            ? ((Number(pos.leverage) as 2 | 5) || levMap[idStr] || 2)
-            : (levMap[idStr] ?? 2);
+        try {
+          const p = await contract.getPosition(id);
 
-          const entryPrice = Number(pos.entryPrice) / 1e18;
-          const collateral = Number(ethers.formatEther(pos.collateral));
-          const cftMinted = Number(pos.cftMinted) / 1e18;
+          // p is an ethers Result (tuple). Access fields by name.
+          const isOpen = Boolean(p.open);
+          if (!isOpen) return;
+
+          const idStr = id.toString();
+          const leverage = Number(p.leverage);
+          const storedLev: 2 | 5 =
+            leverage === 2 || leverage === 5
+              ? leverage
+              : (levMap[idStr] ?? 2);
+
+          const entryPrice = Number(p.entryPrice) / 1e18;
+          const collateral = Number(ethers.formatEther(p.collateral));
+          const cftMinted = Number(p.cftMinted) / 1e18;
+          const marketNum = Number(p.market);
+          const directionNum = Number(p.direction);
 
           positions.push({
             id: idStr,
-            market: INDEX_MARKET[Number(pos.market)],
-            direction: Number(pos.direction) === 0 ? "LONG" : "SHORT",
+            market: INDEX_MARKET[marketNum] ?? "GAS",
+            direction: directionNum === 0 ? "LONG" : "SHORT",
             leverage: storedLev,
             collateral,
             entryPrice,
-            openedAt: Number(pos.openedAt) * 1000,
+            openedAt: Number(p.openedAt) * 1000,
             cftMinted,
           });
+        } catch (e) {
+          console.error(`Failed to fetch position ${id}:`, e);
         }
       })
     );
@@ -237,4 +240,4 @@ export function pnl(p: Position, currentPrice: number): number {
     ? currentPrice - p.entryPrice
     : p.entryPrice - currentPrice;
   return (diff / p.entryPrice) * p.collateral * p.leverage;
-                     }
+                       }
