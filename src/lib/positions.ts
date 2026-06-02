@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 
-export type Market = "GAS" | "ACTIVE_ADDRESSES" | "TXS_PER_BLOCK";
+export type Market = "GAS" | "TXS_PER_BLOCK";
 export type Position = {
   id: string;
   market: Market;
