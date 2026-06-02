@@ -114,19 +114,6 @@ const EXPLANATIONS: Record<string, Record<"low" | "medium" | "high", Explanation
   },
 };
 
-const METRIC_ICONS: Record<string, React.ReactNode> = {
-  GAS: <Fire size={22} weight="duotone" />,
-  TXS_PER_BLOCK: <ArrowsLeftRight size={22} weight="duotone" />,
-  ACTIVE_ADDRESSES: <Users size={22} weight="duotone" />,
-};
-
-const EXPLAIN_ICONS = [
-  <Pulse size={18} weight="duotone" />,
-  <ChartBar size={18} weight="duotone" />,
-  <Diamond size={18} weight="duotone" />,
-  <Lightning size={18} weight="duotone" />,
-];
-
 function formatValue(metric: string, value: number): string {
   if (value === 0) return "Loading";
   if (metric === "GAS") return value.toFixed(4);
@@ -145,9 +132,8 @@ function StateTag({ state }: { state: "low" | "medium" | "high" }) {
   );
 }
 
-// Mini sparkline chart using SVG
 function MiniChart({ values, color }: { values: number[]; color: string }) {
-  if (values.length < 2) return null;
+  if (values.length < 2) return <div className="w-20 h-8 shrink-0" />;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
@@ -155,22 +141,22 @@ function MiniChart({ values, color }: { values: number[]; color: string }) {
   const h = 32;
   const pts = values.map((v, i) => {
     const x = (i / (values.length - 1)) * w;
-    const y = h - ((v - min) / range) * h;
+    const y = h - ((v - min) / range) * (h - 4) - 2;
     return `${x},${y}`;
   });
-  const polyline = pts.join(" ");
   const areaPath = `M${pts[0]} L${pts.join(" L")} L${w},${h} L0,${h} Z`;
+  const gradId = `grad${color.replace(/[^a-z0-9]/gi, "")}`;
 
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" className="shrink-0 opacity-70">
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" className="shrink-0 opacity-75">
       <defs>
-        <linearGradient id={`grad-${color.replace("#", "")}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path d={areaPath} fill={`url(#grad-${color.replace("#", "")})`} />
-      <polyline points={polyline} stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={areaPath} fill={`url(#${gradId})`} />
+      <polyline points={pts.join(" ")} stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -194,29 +180,32 @@ function ExplainCell({
   highlight,
 }: {
   label: string;
-  sublabel: string;
+  sublabel?: string;
   text: string;
   icon: React.ReactNode;
   highlight?: boolean;
 }) {
   return (
     <div
-      className="flex gap-3 p-4 rounded-xl"
-      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+      className="flex gap-3 p-4 rounded-xl h-full"
+      style={{
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(255,255,255,0.06)",
+      }}
     >
       <div
         className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center mt-0.5"
-        style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.45)" }}
+        style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.40)" }}
       >
         {icon}
       </div>
       <div className="flex flex-col gap-1 min-w-0">
         <div className="text-[9px] tracking-[0.22em] uppercase font-semibold text-white/50">{label}</div>
         {sublabel && (
-          <div className="text-[9px] tracking-wider uppercase text-white/20">{sublabel}</div>
+          <div className="text-[9px] tracking-wider uppercase text-white/20 mb-0.5">{sublabel}</div>
         )}
         <div
-          className="text-sm leading-relaxed mt-0.5"
+          className="text-sm leading-relaxed"
           style={{ color: highlight ? "rgba(255,255,255,0.82)" : "rgba(255,255,255,0.48)" }}
         >
           {text}
@@ -251,31 +240,42 @@ function FeedRow({
   const position = range > 0 ? ((value - (dailyLow ?? 0)) / range) * 100 : 50;
   const clampedPosition = Math.min(100, Math.max(2, position));
 
+  const metricIcon: Record<string, React.ReactNode> = {
+    GAS: <Fire size={20} weight="duotone" />,
+    TXS_PER_BLOCK: <ArrowsLeftRight size={20} weight="duotone" />,
+    ACTIVE_ADDRESSES: <Users size={20} weight="duotone" />,
+  };
+
   return (
     <div
-      className="rounded-2xl overflow-hidden cursor-pointer select-none transition-all duration-200"
+      className="rounded-2xl w-full overflow-hidden transition-all duration-200"
       style={{
-        background: open ? "rgba(10,16,38,0.98)" : "rgba(7,12,28,0.92)",
+        background: "rgba(8,10,20,0.95)",
         border: `1px solid ${open ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.07)"}`,
       }}
-      onClick={() => setOpen((o) => !o)}
     >
-      {/* Main row */}
-      <div className="flex items-center gap-4 px-5 sm:px-6 py-5">
-        {/* Metric icon */}
+      {/* Clickable header */}
+      <div
+        className="flex items-center gap-4 px-5 py-5 cursor-pointer select-none"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {/* Icon */}
         <div
           className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center"
           style={{ background: c.iconBg, color: c.iconColor }}
         >
-          {METRIC_ICONS[metricKey]}
+          {metricIcon[metricKey]}
         </div>
 
         {/* Label + range bar */}
         <div className="flex-1 min-w-0">
-          <div className="text-white font-semibold text-sm tracking-wide truncate mb-0.5">{label}</div>
+          <div className="text-white font-semibold text-sm sm:text-base tracking-wide mb-1.5 truncate">{label}</div>
           {(dailyHigh ?? 0) > 0 && (
-            <div className="flex items-center gap-2 mt-1.5">
-              <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
+            <div className="flex items-center gap-2">
+              <div
+                className="flex-1 h-2 rounded-full overflow-hidden"
+                style={{ background: "rgba(255,255,255,0.07)" }}
+              >
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{
@@ -284,7 +284,7 @@ function FeedRow({
                   }}
                 />
               </div>
-              <span className="text-[9px] text-white/22 tabular-nums shrink-0">
+              <span className="text-[9px] text-white/25 tabular-nums shrink-0">
                 {metricKey === "GAS"
                   ? `${(dailyLow ?? 0).toFixed(2)} / ${(dailyHigh ?? 0).toFixed(2)}`
                   : `${Math.round(dailyLow ?? 0).toLocaleString()} / ${Math.round(dailyHigh ?? 0).toLocaleString()}`}
@@ -300,7 +300,7 @@ function FeedRow({
         <StateTag state={state} />
 
         {/* Value */}
-        <div className="text-right shrink-0 ml-1">
+        <div className="text-right shrink-0 ml-2">
           <div
             className="text-xl sm:text-2xl font-semibold tabular-nums tracking-tight"
             style={{ color: value === 0 ? "rgba(255,255,255,0.20)" : "rgba(255,255,255,0.92)" }}
@@ -326,16 +326,15 @@ function FeedRow({
       {/* Expanded explanation */}
       {open && explanation && (
         <div
-          className="px-5 sm:px-6 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-3"
+          className="px-5 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-3"
           style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
-          onClick={(e) => e.stopPropagation()}
         >
           <div className="pt-4">
             <ExplainCell
               label="What Is Happening?"
               sublabel="Describe the on-chain activity"
               text={explanation.happening}
-              icon={EXPLAIN_ICONS[0]}
+              icon={<Pulse size={16} weight="duotone" />}
             />
           </div>
           <div className="pt-4">
@@ -343,23 +342,22 @@ function FeedRow({
               label="Why Is This Happening?"
               sublabel="Explain possible causes"
               text={explanation.why}
-              icon={EXPLAIN_ICONS[1]}
+              icon={<ChartBar size={16} weight="duotone" />}
             />
           </div>
-          <div className="pt-0 sm:pt-0">
+          <div className="pt-0 sm:pt-3">
             <ExplainCell
               label="What Does It Mean?"
               sublabel="Significance and market context"
               text={explanation.means}
-              icon={EXPLAIN_ICONS[2]}
+              icon={<Diamond size={16} weight="duotone" />}
             />
           </div>
-          <div className="pt-0 sm:pt-0">
+          <div className="pt-0 sm:pt-3">
             <ExplainCell
               label="Possible Reactions"
-              sublabel=""
               text={explanation.action}
-              icon={EXPLAIN_ICONS[3]}
+              icon={<Lightning size={16} weight="duotone" />}
               highlight
             />
           </div>
@@ -369,51 +367,18 @@ function FeedRow({
   );
 }
 
-// Animated ETH logo
-function EthHero() {
+function EthLogo() {
   return (
-    <div className="absolute right-0 top-0 w-72 h-72 sm:w-96 sm:h-96 pointer-events-none select-none flex items-center justify-center"
-      style={{ opacity: 0.18 }}
-    >
-      <style>{`
-        @keyframes eth-float {
-          0%, 100% { transform: translateY(0px) rotate(0deg); }
-          33% { transform: translateY(-14px) rotate(3deg); }
-          66% { transform: translateY(-6px) rotate(-2deg); }
-        }
-        @keyframes eth-spin-slow {
-          0% { transform: rotateY(0deg); }
-          100% { transform: rotateY(360deg); }
-        }
-        @keyframes eth-pulse-ring {
-          0%, 100% { opacity: 0.15; transform: scale(1); }
-          50% { opacity: 0.05; transform: scale(1.08); }
-        }
-        .eth-float { animation: eth-float 6s ease-in-out infinite; }
-        .eth-ring { animation: eth-pulse-ring 4s ease-in-out infinite; }
-      `}</style>
-
-      <div className="relative eth-float">
-        {/* Outer ring */}
-        <div
-          className="eth-ring absolute inset-0 rounded-full"
-          style={{ border: "1px solid rgba(139,92,246,0.4)", margin: "-24px" }}
-        />
-        {/* Inner ring */}
-        <div
-          className="eth-ring absolute inset-0 rounded-full"
-          style={{ border: "1px solid rgba(99,102,241,0.3)", margin: "-8px", animationDelay: "1s" }}
-        />
-
-        {/* ETH Diamond */}
-        <svg width="140" height="140" viewBox="0 0 140 140" fill="none">
-          <polygon points="70,10 110,70 70,90 30,70" fill="rgba(139,92,246,0.55)" />
-          <polygon points="70,90 110,70 70,130" fill="rgba(99,102,241,0.40)" />
-          <polygon points="70,90 30,70 70,130" fill="rgba(167,139,250,0.30)" />
-          <polygon points="70,10 110,70 70,70" fill="rgba(196,181,253,0.20)" />
-          <polygon points="70,10 30,70 70,70" fill="rgba(139,92,246,0.35)" />
-        </svg>
-      </div>
+    <div className="absolute right-4 sm:right-0 top-0 w-36 h-36 sm:w-52 sm:h-52 pointer-events-none select-none flex items-center justify-center opacity-20">
+      <svg viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+        <polygon points="70,8 112,70 70,92 28,70" fill="rgba(139,92,246,0.70)" />
+        <polygon points="70,92 112,70 70,132" fill="rgba(99,102,241,0.55)" />
+        <polygon points="70,92 28,70 70,132" fill="rgba(167,139,250,0.45)" />
+        <polygon points="70,8 112,70 70,70" fill="rgba(196,181,253,0.30)" />
+        <polygon points="70,8 28,70 70,70" fill="rgba(139,92,246,0.50)" />
+        <polygon points="70,70 112,70 70,92" fill="rgba(99,102,241,0.35)" />
+        <polygon points="70,70 28,70 70,92" fill="rgba(167,139,250,0.25)" />
+      </svg>
     </div>
   );
 }
@@ -428,22 +393,22 @@ function FeedPage() {
       <div
         className="fixed inset-0 pointer-events-none"
         style={{
-          background:
-            "radial-gradient(ellipse 100% 50% at 50% 0%, rgba(15,25,60,0.8) 0%, rgba(5,8,18,1) 65%)",
+          background: "radial-gradient(ellipse 100% 50% at 50% 0%, rgba(10,15,40,0.7) 0%, rgba(4,6,14,1) 60%)",
         }}
       />
 
       <div className="relative z-10 pt-32 pb-24 mx-auto max-w-7xl px-4 sm:px-8">
+
         {/* Hero */}
-        <div className="relative mb-12 overflow-hidden">
-          <EthHero />
-          <div className="relative z-10">
+        <div className="relative mb-12">
+          <EthLogo />
+          <div className="relative z-10 pr-32 sm:pr-56">
             <div
               className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] px-3 py-1.5 rounded-full mb-6"
               style={{
                 background: "rgba(99,102,241,0.10)",
                 border: "1px solid rgba(99,102,241,0.20)",
-                color: "rgba(165,180,252,0.7)",
+                color: "rgba(165,180,252,0.65)",
               }}
             >
               Live Network Intelligence
