@@ -48,6 +48,65 @@ type PredictRow = {
   userClaimed: boolean;
 };
 
+// localStorage history cache — same schema as predict.tsx
+const PREDICT_HISTORY_KEY = "cf_predict_history_v2";
+
+type HistoryEntry = {
+  roundId: string;
+  metric: string;
+  timeframe: 0 | 1;
+  direction: number;
+  amount: string;
+  startValue: string;
+  endValue: string;
+  status: number;
+  result: number;
+  claimed: boolean;
+  closeTime: number;
+  savedAt: number;
+};
+
+const SLOT_BY_METRIC: Record<string, PredictSlot[]> = {
+  ACTIVE_ADDRESSES: [
+    { contractId: 0, label: "Active Addresses", timeframe: 0, tfLabel: "1H" },
+    { contractId: 0, label: "Active Addresses", timeframe: 1, tfLabel: "24H" },
+  ],
+  GAS_PRICE: [
+    { contractId: 2, label: "Gas Price", timeframe: 0, tfLabel: "1H" },
+    { contractId: 2, label: "Gas Price", timeframe: 1, tfLabel: "24H" },
+  ],
+  TXS_PER_BLOCK: [
+    { contractId: 3, label: "Txs Per Block", timeframe: 0, tfLabel: "1H" },
+    { contractId: 3, label: "Txs Per Block", timeframe: 1, tfLabel: "24H" },
+  ],
+};
+
+function loadCachedHistory(): PredictRow[] {
+  try {
+    const raw = localStorage.getItem(PREDICT_HISTORY_KEY);
+    if (!raw) return [];
+    const entries: HistoryEntry[] = JSON.parse(raw);
+    return entries.map((e) => {
+      const slots = SLOT_BY_METRIC[e.metric] ?? [];
+      const slot = slots.find((s) => s.timeframe === e.timeframe) ?? slots[0] ?? PREDICT_SLOTS[0];
+      return {
+        roundId: BigInt(e.roundId),
+        slot,
+        status: e.status,
+        result: e.result,
+        startValue: BigInt(e.startValue),
+        endValue: BigInt(e.endValue),
+        closeTime: BigInt(e.closeTime),
+        higherPool: 0n,
+        lowerPool: 0n,
+        userAmount: BigInt(e.amount),
+        userDirection: e.direction,
+        userClaimed: e.claimed,
+      };
+    });
+  } catch { return []; }
+}
+
 function formatEth(wei: bigint): string {
   const eth = Number(wei) / 1e18;
   if (eth === 0) return "0";
@@ -70,13 +129,16 @@ function formatCountdown(endTime: bigint): string {
 function formatMetricValue(slot: PredictSlot, raw: bigint): string {
   if (raw === 0n) return "—";
   if (slot.contractId === 2) {
-    // Gas Price: stored as wei, display as gwei
     return (Number(raw) / 1e9).toFixed(4) + " gwei";
   }
-  return Number(raw).toLocaleString();
+  if (slot.contractId === 3) {
+    return Math.round(Number(raw) / 100).toLocaleString() + " txs";
+  }
+  // Active Addresses
+  if (raw > 1_000_000_000_000n) return Math.round(Number(raw) / 1e18).toLocaleString() + " addresses";
+  return Number(raw).toLocaleString() + " addresses";
 }
 
-// Scan back up to LOOKBACK rounds per slot to find all user stakes
 const LOOKBACK = 20;
 
 async function fetchAllPredictRows(wallet: string, contract: ethers.Contract): Promise<PredictRow[]> {
@@ -121,7 +183,6 @@ async function fetchAllPredictRows(wallet: string, contract: ethers.Contract): P
     })
   );
 
-  // Sort: open first, then resolved by closeTime descending
   return allRows.sort((a, b) => {
     if (a.status === 0 && b.status !== 0) return -1;
     if (a.status !== 0 && b.status === 0) return 1;
@@ -130,7 +191,7 @@ async function fetchAllPredictRows(wallet: string, contract: ethers.Contract): P
 }
 
 function usePredictRows(wallet: string | null | undefined) {
-  const [rows, setRows] = useState<PredictRow[]>([]);
+  const [rows, setRows] = useState<PredictRow[]>(() => loadCachedHistory());
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
@@ -140,9 +201,22 @@ function usePredictRows(wallet: string | null | undefined) {
       const provider = new ethers.JsonRpcProvider("https://sepolia-rollup.arbitrum.io/rpc");
       const contract = new ethers.Contract(PREDICT_PROXY, PREDICT_ABI, provider);
       const result = await fetchAllPredictRows(wallet, contract);
-      setRows(result);
+      // Merge with cached history so nothing disappears
+      const cached = loadCachedHistory();
+      const onChainIds = new Set(result.map((r) => `${r.roundId}-${r.slot.contractId}-${r.slot.timeframe}`));
+      const cachedOnly = cached.filter(
+        (c) => !onChainIds.has(`${c.roundId}-${c.slot.contractId}-${c.slot.timeframe}`)
+      );
+      const merged = [...result, ...cachedOnly].sort((a, b) => {
+        if (a.status === 0 && b.status !== 0) return -1;
+        if (a.status !== 0 && b.status === 0) return 1;
+        return Number(b.closeTime) - Number(a.closeTime);
+      });
+      setRows(merged);
     } catch (e) {
       console.error("Predict rows error:", e);
+      // Fall back to cache on error
+      setRows(loadCachedHistory());
     } finally {
       setLoading(false);
     }
@@ -168,7 +242,12 @@ function PortfolioPage() {
   const [claiming, setClaiming] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
 
-  const openPredicts = predictRows.filter((r) => r.status === 0);
+  const now = Math.floor(Date.now() / 1000);
+  // Truly open: status=0 and closeTime is in the future
+  const openPredicts = predictRows.filter((r) => r.status === 0 && Number(r.closeTime) > now);
+  // Pending resolution: status=0 but closeTime has passed (round closed, awaiting keeper resolve)
+  const pendingPredicts = predictRows.filter((r) => r.status === 0 && Number(r.closeTime) <= now);
+  // History: resolved or cancelled
   const historyPredicts = predictRows.filter((r) => r.status !== 0);
 
   const handleClaim = async (roundId: bigint) => {
@@ -269,9 +348,9 @@ function PortfolioPage() {
         <div className="mt-4 glass rounded-2xl overflow-hidden">
           {!wallet ? (
             <div className="p-6 text-sm text-white/60">Connect your wallet to see your predictions.</div>
-          ) : predictLoading && openPredicts.length === 0 ? (
+          ) : predictLoading && openPredicts.length === 0 && pendingPredicts.length === 0 ? (
             <div className="p-6 text-sm text-white/40">Loading predictions...</div>
-          ) : openPredicts.length === 0 ? (
+          ) : openPredicts.length === 0 && pendingPredicts.length === 0 ? (
             <div className="p-6 text-sm text-white/60">
               No predict positions yet. Head to <Link to="/predict" className="text-white underline-offset-4 hover:underline">Predict</Link> to get started.
             </div>
@@ -286,12 +365,13 @@ function PortfolioPage() {
                     <th className="text-right p-4">Entry Value</th>
                     <th className="text-right p-4">Staked</th>
                     <th className="text-right p-4">Pool</th>
-                    <th className="text-right p-4">Closes In</th>
+                    <th className="text-right p-4">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {openPredicts.map((row, i) => {
+                  {[...openPredicts, ...pendingPredicts].map((row, i) => {
                     const totalPool = row.higherPool + row.lowerPool;
+                    const isPending = row.status === 0 && Number(row.closeTime) <= now;
                     return (
                       <tr key={`${row.roundId}-${row.slot.contractId}-${row.slot.timeframe}`} className={i % 2 ? "bg-white/[0.02]" : ""}>
                         <td className="p-4 text-white font-medium">{row.slot.label}</td>
@@ -309,9 +389,17 @@ function PortfolioPage() {
                           {formatMetricValue(row.slot, row.startValue)}
                         </td>
                         <td className="p-4 text-right text-white tabular-nums">{formatEth(row.userAmount)} ETH</td>
-                        <td className="p-4 text-right text-white/50 tabular-nums">{formatEth(totalPool)} ETH</td>
+                        <td className="p-4 text-right text-white/50 tabular-nums">
+                          {totalPool > 0n ? formatEth(totalPool) + " ETH" : "—"}
+                        </td>
                         <td className="p-4 text-right">
-                          <span className="text-emerald-300/70 text-xs tabular-nums">{formatCountdown(row.closeTime)}</span>
+                          {isPending ? (
+                            <span className="text-yellow-400/70 text-xs">Awaiting result</span>
+                          ) : (
+                            <span className="text-emerald-300/70 text-xs tabular-nums">
+                              Closes {formatCountdown(row.closeTime)}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -472,4 +560,4 @@ function PortfolioPage() {
       </div>
     </Layout>
   );
-                                                  }
+                      }
