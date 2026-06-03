@@ -13,8 +13,6 @@ export const Route = createFileRoute("/portfolio")({
   head: () => ({ meta: [{ title: "Portfolio — ChainFlux" }] }),
 });
 
-// ── Predict contract ──────────────────────────────────────────────────────────
-
 const PREDICT_PROXY = "0x7708a4C85F526E23090d3B27201487E91AF58694";
 const PREDICT_ABI = [
   "function stake(uint256 roundId, uint8 direction) payable",
@@ -24,12 +22,9 @@ const PREDICT_ABI = [
   "function getLatestRound(uint8 metric, uint8 timeframe) view returns (uint256)",
 ];
 
-const STATUS_LABEL: Record<number, string> = { 0: "Open", 1: "Resolved", 2: "Cancelled" };
-const RESULT_LABEL: Record<number, string> = { 0: "Higher", 1: "Lower" };
+type PredictSlot = { contractId: number; label: string; timeframe: 0 | 1; tfLabel: string };
 
-type PredictMetric = { contractId: number; label: string; timeframe: 0 | 1; tfLabel: string };
-
-const PREDICT_SLOTS: PredictMetric[] = [
+const PREDICT_SLOTS: PredictSlot[] = [
   { contractId: 0, label: "Active Addresses", timeframe: 0, tfLabel: "1H" },
   { contractId: 0, label: "Active Addresses", timeframe: 1, tfLabel: "24H" },
   { contractId: 2, label: "Gas Price", timeframe: 0, tfLabel: "1H" },
@@ -40,9 +35,11 @@ const PREDICT_SLOTS: PredictMetric[] = [
 
 type PredictRow = {
   roundId: bigint;
-  metric: PredictMetric;
+  slot: PredictSlot;
   status: number;
   result: number;
+  startValue: bigint;
+  endValue: bigint;
   closeTime: bigint;
   higherPool: bigint;
   lowerPool: bigint;
@@ -70,6 +67,68 @@ function formatCountdown(endTime: bigint): string {
   return `${s}s`;
 }
 
+function formatMetricValue(slot: PredictSlot, raw: bigint): string {
+  if (raw === 0n) return "—";
+  if (slot.contractId === 2) {
+    // Gas Price: stored as wei, display as gwei
+    return (Number(raw) / 1e9).toFixed(4) + " gwei";
+  }
+  return Number(raw).toLocaleString();
+}
+
+// Scan back up to LOOKBACK rounds per slot to find all user stakes
+const LOOKBACK = 20;
+
+async function fetchAllPredictRows(wallet: string, contract: ethers.Contract): Promise<PredictRow[]> {
+  const allRows: PredictRow[] = [];
+
+  await Promise.all(
+    PREDICT_SLOTS.map(async (slot) => {
+      try {
+        const latestId: bigint = await contract.getLatestRound(slot.contractId, slot.timeframe);
+        const minId = latestId > BigInt(LOOKBACK) ? latestId - BigInt(LOOKBACK) : 1n;
+
+        const checks: Promise<void>[] = [];
+        for (let id = latestId; id >= minId; id--) {
+          const roundId = id;
+          checks.push(
+            (async () => {
+              try {
+                const us = await contract.getUserStake(roundId, wallet);
+                const userAmount: bigint = us[0];
+                if (userAmount === 0n) return;
+                const raw = await contract.rounds(roundId);
+                allRows.push({
+                  roundId,
+                  slot,
+                  status: Number(raw[9]),
+                  result: Number(raw[10]),
+                  startValue: raw[3],
+                  endValue: raw[4],
+                  closeTime: raw[6],
+                  higherPool: raw[7],
+                  lowerPool: raw[8],
+                  userAmount,
+                  userDirection: Number(us[1]),
+                  userClaimed: us[2],
+                });
+              } catch { /* skip */ }
+            })()
+          );
+        }
+        await Promise.all(checks);
+      } catch { /* skip slot */ }
+    })
+  );
+
+  // Sort: open first, then resolved by closeTime descending
+  return allRows.sort((a, b) => {
+    if (a.status === 0 && b.status !== 0) return -1;
+    if (a.status !== 0 && b.status === 0) return 1;
+    return Number(b.closeTime) - Number(a.closeTime);
+  });
+}
+
 function usePredictRows(wallet: string | null | undefined) {
   const [rows, setRows] = useState<PredictRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -80,32 +139,8 @@ function usePredictRows(wallet: string | null | undefined) {
     try {
       const provider = new ethers.JsonRpcProvider("https://sepolia-rollup.arbitrum.io/rpc");
       const contract = new ethers.Contract(PREDICT_PROXY, PREDICT_ABI, provider);
-
-      const results = await Promise.all(
-        PREDICT_SLOTS.map(async (slot) => {
-          try {
-            const roundId: bigint = await contract.getLatestRound(slot.contractId, slot.timeframe);
-            const raw = await contract.rounds(roundId);
-            const us = await contract.getUserStake(roundId, wallet);
-            const userAmount: bigint = us[0];
-            if (userAmount === 0n) return null;
-            return {
-              roundId,
-              metric: slot,
-              status: Number(raw[9]),
-              result: Number(raw[10]),
-              closeTime: raw[6],
-              higherPool: raw[7],
-              lowerPool: raw[8],
-              userAmount,
-              userDirection: Number(us[1]),
-              userClaimed: us[2],
-            } as PredictRow;
-          } catch { return null; }
-        })
-      );
-
-      setRows(results.filter(Boolean) as PredictRow[]);
+      const result = await fetchAllPredictRows(wallet, contract);
+      setRows(result);
     } catch (e) {
       console.error("Predict rows error:", e);
     } finally {
@@ -122,8 +157,6 @@ function usePredictRows(wallet: string | null | undefined) {
   return { rows, loading, reload: load };
 }
 
-// ── Portfolio page ────────────────────────────────────────────────────────────
-
 function PortfolioPage() {
   const wallet = useWallet();
   const { open, hist } = usePositions(wallet);
@@ -134,6 +167,9 @@ function PortfolioPage() {
 
   const [claiming, setClaiming] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
+
+  const openPredicts = predictRows.filter((r) => r.status === 0);
+  const historyPredicts = predictRows.filter((r) => r.status !== 0);
 
   const handleClaim = async (roundId: bigint) => {
     const key = roundId.toString();
@@ -171,7 +207,7 @@ function PortfolioPage() {
           )}
         </div>
 
-        {/* ── Open perp positions ── */}
+        {/* Open perp positions */}
         <h2 className="mt-14 text-[10px] tracking-[0.3em] text-white/50 uppercase">Open Positions</h2>
         <div className="mt-4 glass rounded-2xl overflow-hidden">
           {open.length === 0 ? (
@@ -228,52 +264,40 @@ function PortfolioPage() {
           )}
         </div>
 
-        {/* ── Predict positions ── */}
+        {/* Open predict positions */}
         <h2 className="mt-14 text-[10px] tracking-[0.3em] text-white/50 uppercase">Predict Positions</h2>
         <div className="mt-4 glass rounded-2xl overflow-hidden">
           {!wallet ? (
             <div className="p-6 text-sm text-white/60">Connect your wallet to see your predictions.</div>
-          ) : predictLoading && predictRows.length === 0 ? (
+          ) : predictLoading && openPredicts.length === 0 ? (
             <div className="p-6 text-sm text-white/40">Loading predictions...</div>
-          ) : predictRows.length === 0 ? (
+          ) : openPredicts.length === 0 ? (
             <div className="p-6 text-sm text-white/60">
               No predict positions yet. Head to <Link to="/predict" className="text-white underline-offset-4 hover:underline">Predict</Link> to get started.
             </div>
           ) : (
             <div className="overflow-x-auto">
-              {claimError && (
-                <div className="px-5 py-3 text-xs text-red-400/80 border-b border-white/5">{claimError}</div>
-              )}
               <table className="w-full text-sm">
                 <thead className="text-white/50 text-xs uppercase tracking-wider">
                   <tr>
                     <th className="text-left p-4">Metric</th>
-                    <th className="text-left p-4">Timeframe</th>
+                    <th className="text-left p-4">TF</th>
                     <th className="text-left p-4">Your Call</th>
+                    <th className="text-right p-4">Entry Value</th>
                     <th className="text-right p-4">Staked</th>
                     <th className="text-right p-4">Pool</th>
-                    <th className="text-right p-4">Status</th>
-                    <th className="text-right p-4">Result</th>
-                    <th className="text-right p-4"></th>
+                    <th className="text-right p-4">Closes In</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {predictRows.map((row, i) => {
-                    const key = row.roundId.toString();
-                    const isOpen = row.status === 0;
-                    const isResolved = row.status === 1;
+                  {openPredicts.map((row, i) => {
                     const totalPool = row.higherPool + row.lowerPool;
-                    const userWon = isResolved && row.userDirection === row.result;
-                    const canClaim = isResolved && userWon && !row.userClaimed;
-                    const alreadyClaimed = isResolved && row.userClaimed;
-                    const lost = isResolved && !userWon;
-
                     return (
-                      <tr key={`${key}-${i}`} className={i % 2 ? "bg-white/[0.02]" : ""}>
-                        <td className="p-4 text-white font-medium">{row.metric.label}</td>
+                      <tr key={`${row.roundId}-${row.slot.contractId}-${row.slot.timeframe}`} className={i % 2 ? "bg-white/[0.02]" : ""}>
+                        <td className="p-4 text-white font-medium">{row.slot.label}</td>
                         <td className="p-4">
                           <span className="text-[10px] tracking-widest uppercase px-2 py-1 rounded-full bg-white/5 border border-white/10 text-white/50">
-                            {row.metric.tfLabel}
+                            {row.slot.tfLabel}
                           </span>
                         </td>
                         <td className="p-4">
@@ -281,42 +305,13 @@ function PortfolioPage() {
                             {row.userDirection === 0 ? "Higher" : "Lower"}
                           </span>
                         </td>
+                        <td className="p-4 text-right text-white/70 tabular-nums">
+                          {formatMetricValue(row.slot, row.startValue)}
+                        </td>
                         <td className="p-4 text-right text-white tabular-nums">{formatEth(row.userAmount)} ETH</td>
                         <td className="p-4 text-right text-white/50 tabular-nums">{formatEth(totalPool)} ETH</td>
                         <td className="p-4 text-right">
-                          {isOpen ? (
-                            <span className="text-emerald-300/70 text-xs">{formatCountdown(row.closeTime)}</span>
-                          ) : (
-                            <span className="text-white/40 text-xs">{STATUS_LABEL[row.status]}</span>
-                          )}
-                        </td>
-                        <td className="p-4 text-right text-xs">
-                          {isResolved ? (
-                            <span className={userWon ? "text-emerald-300" : "text-red-300/70"}>
-                              {RESULT_LABEL[row.result]} {userWon ? "— Won" : "— Lost"}
-                            </span>
-                          ) : (
-                            <span className="text-white/25">Pending</span>
-                          )}
-                        </td>
-                        <td className="p-4 text-right">
-                          {canClaim && (
-                            <button
-                              onClick={() => handleClaim(row.roundId)}
-                              disabled={claiming === key}
-                              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                              style={{
-                                background: "rgba(52,211,153,0.15)",
-                                border: "1px solid rgba(52,211,153,0.30)",
-                                color: "#6ee7b7",
-                                opacity: claiming === key ? 0.5 : 1,
-                              }}
-                            >
-                              {claiming === key ? "Claiming..." : "Claim"}
-                            </button>
-                          )}
-                          {alreadyClaimed && <span className="text-white/25 text-xs">Claimed</span>}
-                          {lost && <span className="text-white/25 text-xs">—</span>}
+                          <span className="text-emerald-300/70 text-xs tabular-nums">{formatCountdown(row.closeTime)}</span>
                         </td>
                       </tr>
                     );
@@ -327,7 +322,7 @@ function PortfolioPage() {
           )}
         </div>
 
-        {/* ── Trade history ── */}
+        {/* Trade history */}
         <h2 className="mt-14 text-[10px] tracking-[0.3em] text-white/50 uppercase">Trade History</h2>
         <div className="mt-4 glass rounded-2xl overflow-hidden">
           {hist.length === 0 ? (
@@ -375,7 +370,106 @@ function PortfolioPage() {
             </div>
           )}
         </div>
+
+        {/* Predict history */}
+        <h2 className="mt-14 text-[10px] tracking-[0.3em] text-white/50 uppercase">Predict History</h2>
+        <div className="mt-4 glass rounded-2xl overflow-hidden">
+          {!wallet ? (
+            <div className="p-6 text-sm text-white/60">Connect your wallet to see your predict history.</div>
+          ) : predictLoading && historyPredicts.length === 0 ? (
+            <div className="p-6 text-sm text-white/40">Loading history...</div>
+          ) : historyPredicts.length === 0 ? (
+            <div className="p-6 text-sm text-white/60">No predict history yet.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              {claimError && (
+                <div className="px-5 py-3 text-xs text-red-400/80 border-b border-white/5">{claimError}</div>
+              )}
+              <table className="w-full text-sm">
+                <thead className="text-white/50 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="text-left p-4">Metric</th>
+                    <th className="text-left p-4">TF</th>
+                    <th className="text-left p-4">Your Call</th>
+                    <th className="text-right p-4">Entry Value</th>
+                    <th className="text-right p-4">Close Value</th>
+                    <th className="text-right p-4">Staked</th>
+                    <th className="text-right p-4">Result</th>
+                    <th className="text-right p-4">Date</th>
+                    <th className="text-right p-4"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyPredicts.map((row, i) => {
+                    const key = `${row.roundId}-${row.slot.contractId}-${row.slot.timeframe}`;
+                    const isResolved = row.status === 1;
+                    const userWon = isResolved && row.userDirection === row.result;
+                    const canClaim = isResolved && userWon && !row.userClaimed;
+                    const alreadyClaimed = isResolved && row.userClaimed;
+                    const closeDate = new Date(Number(row.closeTime) * 1000);
+                    const dateStr = closeDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                    const timeStr = closeDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+
+                    return (
+                      <tr key={key} className={i % 2 ? "bg-white/[0.02]" : ""}>
+                        <td className="p-4 text-white font-medium">{row.slot.label}</td>
+                        <td className="p-4">
+                          <span className="text-[10px] tracking-widest uppercase px-2 py-1 rounded-full bg-white/5 border border-white/10 text-white/50">
+                            {row.slot.tfLabel}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <span className={row.userDirection === 0 ? "text-emerald-300" : "text-red-300"}>
+                            {row.userDirection === 0 ? "Higher" : "Lower"}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right text-white/70 tabular-nums">
+                          {formatMetricValue(row.slot, row.startValue)}
+                        </td>
+                        <td className="p-4 text-right text-white/70 tabular-nums">
+                          {row.endValue > 0n ? formatMetricValue(row.slot, row.endValue) : "—"}
+                        </td>
+                        <td className="p-4 text-right text-white tabular-nums">{formatEth(row.userAmount)} ETH</td>
+                        <td className="p-4 text-right">
+                          {isResolved ? (
+                            <span className={userWon ? "text-emerald-300 font-semibold" : "text-red-300/70"}>
+                              {userWon ? "Won" : "Lost"}
+                            </span>
+                          ) : (
+                            <span className="text-white/30 text-xs">Cancelled</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-right text-white/40 text-xs tabular-nums">
+                          {dateStr} {timeStr}
+                        </td>
+                        <td className="p-4 text-right">
+                          {canClaim && (
+                            <button
+                              onClick={() => handleClaim(row.roundId)}
+                              disabled={claiming === row.roundId.toString()}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                              style={{
+                                background: "rgba(52,211,153,0.15)",
+                                border: "1px solid rgba(52,211,153,0.30)",
+                                color: "#6ee7b7",
+                                opacity: claiming === row.roundId.toString() ? 0.5 : 1,
+                              }}
+                            >
+                              {claiming === row.roundId.toString() ? "Claiming..." : "Claim"}
+                            </button>
+                          )}
+                          {alreadyClaimed && <span className="text-white/25 text-xs">Claimed</span>}
+                          {!canClaim && !alreadyClaimed && <span className="text-white/20 text-xs">—</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </Layout>
   );
-   }
+                                                  }
