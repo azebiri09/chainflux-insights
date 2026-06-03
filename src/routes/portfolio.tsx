@@ -339,7 +339,7 @@ function PortfolioPage() {
           )}
         </div>
 
-        {/* Open predict positions */}
+       {/* Open predict positions */}
         <h2 className="mt-14 text-[10px] tracking-[0.3em] text-white/50 uppercase">Predict Positions</h2>
         <div className="mt-4 glass rounded-2xl overflow-hidden">
           {!wallet ? (
