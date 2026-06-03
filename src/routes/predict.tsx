@@ -50,37 +50,29 @@ const METRIC_DESCRIPTION: Record<ActiveMetric, string> = {
     "How busy each Ethereum block is right now. High transaction counts mean the network is under pressure. Low counts mean things are calm. Which way is it heading?",
 };
 
-const QUESTION_BANK: Record<ActiveMetric, { bottom: string[]; middle: string[]; top: string[] }> = {
-  GAS_PRICE: {
-    bottom: ["Will gas rebound in {t}?", "Will gas recover in {t}?", "Will gas move higher in {t}?"],
-    middle: ["Will gas be higher in {t}?", "Will gas move higher in {t}?", "Will gas trend higher in {t}?"],
-    top: ["Will gas continue higher in {t}?", "Will gas stay higher in {t}?", "Will gas move higher in {t}?"],
-  },
-  TXS_PER_BLOCK: {
-    bottom: ["Will transaction activity rebound in {t}?", "Will transaction activity recover in {t}?", "Will transaction activity move higher in {t}?"],
-    middle: ["Will transactions per block be higher in {t}?", "Will transaction activity move higher in {t}?", "Will transaction activity trend higher in {t}?"],
-    top: ["Will transaction activity continue higher in {t}?", "Will transaction activity stay higher in {t}?", "Will transaction activity move higher in {t}?"],
-  },
-  ACTIVE_ADDRESSES: {
-    bottom: ["Will network activity rebound in {t}?", "Will network activity recover in {t}?", "Will network activity move higher in {t}?"],
-    middle: ["Will active addresses be higher in {t}?", "Will network activity move higher in {t}?", "Will network activity trend higher in {t}?"],
-    top: ["Will active addresses continue higher in {t}?", "Will active addresses stay higher in {t}?", "Will active addresses move higher in {t}?"],
-  },
+const QUESTION_BANK: Record<ActiveMetric, string[]> = {
+  ACTIVE_ADDRESSES: [
+    "Will Active Addresses be higher in 1 hour?",
+    "Will on-chain activity increase over the next hour?",
+    "Are more wallets about to become active?",
+  ],
+  GAS_PRICE: [
+    "Will Gas Price be higher in 1 hour?",
+    "Will network fees increase over the next hour?",
+    "Is gas about to move higher?",
+  ],
+  TXS_PER_BLOCK: [
+    "Will Transactions Per Block be higher in 1 hour?",
+    "Will transaction activity increase over the next hour?",
+    "Are blocks about to become more active?",
+  ],
 };
 
-function getLockedQuestion(metric: ActiveMetric, roundId: bigint | undefined, position: number, timeframe: 0 | 1): string {
-  const timeLabel = timeframe === 0 ? "1 hour" : "24 hours";
-  const bank = QUESTION_BANK[metric];
-  const pool = position <= 0.2 ? bank.bottom : position >= 0.8 ? bank.top : bank.middle;
-  const lastKey = `cfq_last_${metric}`;
-  let seed = roundId ? Number(roundId % BigInt(1000)) : Math.floor(Math.random() * 1000);
-  const lastUsed = localStorage.getItem(lastKey);
-  let idx = seed % pool.length;
-  if (pool[idx] === lastUsed && pool.length > 1) idx = (idx + 1) % pool.length;
-  const question = pool[idx];
-  localStorage.setItem(lastKey, question);
-  return question.replace("{t}", timeLabel);
-}
+function getLockedQuestion(metric: ActiveMetric, roundId: bigint | undefined, _position: number, _timeframe: 0 | 1): string {
+  const questions = QUESTION_BANK[metric];
+  const seed = roundId ? Number(roundId % BigInt(questions.length)) : 0;
+  return questions[seed];
+    }
 
 type FeedData = {
   ACTIVE_ADDRESSES: number;
