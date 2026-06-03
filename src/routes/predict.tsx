@@ -135,6 +135,21 @@ function formatValue(metric: ActiveMetric, value: number): string {
   }
 }
 
+function formatContractValue(metric: ActiveMetric, raw: bigint): string {
+  // Contract stores gas as gwei * 1e9, addresses and txs as raw integers
+  switch (metric) {
+    case "GAS_PRICE": {
+      // stored as wei-level gwei: divide by 1e9 to get gwei
+      const gwei = Number(raw) / 1e9;
+      return gwei.toFixed(4) + " gwei";
+    }
+    case "TXS_PER_BLOCK":
+      return Number(raw).toLocaleString() + " txs";
+    case "ACTIVE_ADDRESSES":
+      return Number(raw).toLocaleString() + " addresses";
+  }
+}
+
 function formatEth(wei: bigint): string {
   const eth = Number(wei) / 1e18;
   if (eth === 0) return "0";
@@ -191,13 +206,87 @@ function useCountdown(endTime: bigint | undefined): string {
   return formatCountdown(endTime);
 }
 
+// ---- History storage ----
+
+type HistoryEntry = {
+  metric: ActiveMetric;
+  timeframe: 0 | 1;
+  roundId: string;
+  direction: number; // 0 = Higher, 1 = Lower
+  amount: string; // ETH string
+  startValue: string; // raw bigint as string
+  endValue: string;
+  won: boolean;
+  claimed: boolean;
+  timestamp: number;
+};
+
+const HISTORY_KEY = "cfx_predict_history";
+
+function loadHistory(): HistoryEntry[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as HistoryEntry[];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(entries: HistoryEntry[]) {
+  // Keep last 50 entries
+  const trimmed = entries.slice(-50);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
+}
+
+function upsertHistory(entry: HistoryEntry) {
+  const all = loadHistory();
+  const idx = all.findIndex(
+    (e) => e.roundId === entry.roundId && e.metric === entry.metric && e.timeframe === entry.timeframe
+  );
+  if (idx >= 0) {
+    all[idx] = entry;
+  } else {
+    all.push(entry);
+  }
+  saveHistory(all);
+}
+
+// ---- Component ----
+
 const STATUS = { OPEN: 0, RESOLVED: 1, CANCELLED: 2 };
 
-type RoundData = { roundId: bigint; startValue: bigint; endValue: bigint; higherPool: bigint; lowerPool: bigint; status: number; startTime: bigint; endTime: bigint; };
-type UserStake = { amount: bigint; direction: number; claimed: boolean; };
-type CardState = { round: RoundData | null; userStake: UserStake | null; loading: boolean; staking: boolean; claiming: boolean; txError: string | null; txSuccess: string | null; amount: string; };
+type RoundData = {
+  roundId: bigint;
+  startValue: bigint;
+  endValue: bigint;
+  higherPool: bigint;
+  lowerPool: bigint;
+  status: number;
+  result: number; // 0 = HIGHER won, 1 = LOWER won, 2 = DRAW/none
+  startTime: bigint;
+  endTime: bigint;
+};
 
-function MetricCard({ metric, timeframe, feed }: { metric: ActiveMetric; timeframe: 0 | 1; feed: FeedData; }) {
+type UserStake = { amount: bigint; direction: number; claimed: boolean; };
+
+type CardState = {
+  round: RoundData | null;
+  userStake: UserStake | null;
+  loading: boolean;
+  staking: boolean;
+  claiming: boolean;
+  txError: string | null;
+  txSuccess: string | null;
+  amount: string;
+};
+
+function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
+  metric: ActiveMetric;
+  timeframe: 0 | 1;
+  feed: FeedData;
+  onHistoryUpdate: () => void;
+}) {
   const wallet = useWallet();
   const contractId = METRIC_CONTRACT_ID[metric];
   const { current, high, low } = getMetricValues(metric, feed);
@@ -210,6 +299,7 @@ function MetricCard({ metric, timeframe, feed }: { metric: ActiveMetric; timefra
     round: null, userStake: null, loading: true, staking: false,
     claiming: false, txError: null, txSuccess: null, amount: "",
   });
+
   const questionRef = useRef<string>("");
   const lastRoundIdRef = useRef<string>("");
   const roundIdStr = card.round?.roundId?.toString() ?? "";
@@ -226,21 +316,48 @@ function MetricCard({ metric, timeframe, feed }: { metric: ActiveMetric; timefra
       const roundId: bigint = await contract.getLatestRound(contractId, timeframe);
       const raw = await contract.rounds(roundId);
       const round: RoundData = {
-        roundId, startValue: raw[3], endValue: raw[4],
-        higherPool: raw[7], lowerPool: raw[8], status: Number(raw[9]),
-        startTime: raw[5], endTime: raw[6],
+        roundId,
+        startValue: raw[3],
+        endValue: raw[4],
+        higherPool: raw[7],
+        lowerPool: raw[8],
+        status: Number(raw[9]),
+        result: Number(raw[10]),
+        startTime: raw[5],
+        endTime: raw[6],
       };
       let userStake: UserStake | null = null;
       if (wallet) {
         const us = await contract.getUserStake(roundId, wallet);
         userStake = { amount: us[0], direction: Number(us[1]), claimed: us[2] };
       }
+
+      // Save to history if round is resolved and user had a stake
+      if (wallet && userStake && userStake.amount > 0n && round.status === STATUS.RESOLVED) {
+        // Determine win: result 0 = HIGHER wins, 1 = LOWER wins
+        const won = round.result === userStake.direction;
+        const entry: HistoryEntry = {
+          metric,
+          timeframe,
+          roundId: roundId.toString(),
+          direction: userStake.direction,
+          amount: formatEth(userStake.amount),
+          startValue: round.startValue.toString(),
+          endValue: round.endValue.toString(),
+          won,
+          claimed: userStake.claimed,
+          timestamp: Number(round.endTime),
+        };
+        upsertHistory(entry);
+        onHistoryUpdate();
+      }
+
       setCard((c) => ({ ...c, round, userStake, loading: false }));
     } catch (e: any) {
       console.error(`Load error ${metric}:`, e?.message);
       setCard((c) => ({ ...c, loading: false }));
     }
-  }, [contractId, timeframe, wallet]);
+  }, [contractId, timeframe, wallet, metric, onHistoryUpdate]);
 
   useEffect(() => {
     load();
@@ -277,6 +394,12 @@ function MetricCard({ metric, timeframe, feed }: { metric: ActiveMetric; timefra
       const contract = await getWriteContract();
       const tx = await contract.claim(card.round!.roundId);
       await tx.wait();
+      // Update history entry to claimed
+      const all = loadHistory();
+      const idx = all.findIndex(
+        (e) => e.roundId === card.round!.roundId.toString() && e.metric === metric && e.timeframe === timeframe
+      );
+      if (idx >= 0) { all[idx].claimed = true; saveHistory(all); onHistoryUpdate(); }
       setCard((c) => ({ ...c, claiming: false, txSuccess: "Winnings claimed" }));
       load();
     } catch (e: any) {
@@ -293,6 +416,12 @@ function MetricCard({ metric, timeframe, feed }: { metric: ActiveMetric; timefra
   const canClaim = isResolved && card.userStake && card.userStake.amount > 0n && !card.userStake.claimed;
   const totalPool = card.round ? card.round.higherPool + card.round.lowerPool : 0n;
   const hasUserStake = card.userStake && card.userStake.amount > 0n;
+
+  // Result summary for resolved rounds with a stake
+  const showResult = isResolved && hasUserStake && card.round;
+  const userWon = showResult
+    ? card.round!.result === card.userStake!.direction
+    : false;
 
   return (
     <div
@@ -342,6 +471,7 @@ function MetricCard({ metric, timeframe, feed }: { metric: ActiveMetric; timefra
           </div>
         </div>
       )}
+
       {/* Question */}
       <div className="px-6 pb-4">
         <p className="text-white text-lg leading-snug font-semibold">
@@ -383,7 +513,7 @@ function MetricCard({ metric, timeframe, feed }: { metric: ActiveMetric; timefra
         </div>
       </div>
 
-      {/* Status row */}
+       {/* Status row */}
       <div className="px-6 pb-5 flex items-center justify-between gap-2">
         <div className="text-[10px] uppercase tracking-widest text-white/30">
           {card.loading ? "Loading" : isOpen ? `Closes ${countdown}` : isResolved ? "Resolved" : "Inactive"}
@@ -402,7 +532,52 @@ function MetricCard({ metric, timeframe, feed }: { metric: ActiveMetric; timefra
         {card.txError && <div className="text-xs text-red-400/80 leading-snug">{card.txError}</div>}
         {card.txSuccess && <div className="text-xs text-emerald-400/80 leading-snug">{card.txSuccess}</div>}
 
-        {hasUserStake && (
+        {/* Result summary card — shown when round resolved and user had a position */}
+        {showResult && (
+          <div
+            className="rounded-xl px-5 py-4 flex flex-col gap-2"
+            style={{
+              background: userWon ? "rgba(52,211,153,0.08)" : "rgba(239,68,68,0.08)",
+              border: `1px solid ${userWon ? "rgba(52,211,153,0.25)" : "rgba(239,68,68,0.22)"}`,
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className="text-xs font-bold uppercase tracking-widest"
+                style={{ color: userWon ? "#6ee7b7" : "#fca5a5" }}
+              >
+                {userWon ? "You Won" : "You Lost"}
+              </span>
+              <span className="text-[10px] uppercase tracking-widest text-white/30">Round closed</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between text-xs text-white/50">
+                <span>Your call</span>
+                <span style={{ color: card.userStake!.direction === 0 ? "#6ee7b7" : "#fca5a5" }}>
+                  {card.userStake!.direction === 0 ? "Higher" : "Lower"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-white/50">
+                <span>Entry value</span>
+                <span className="text-white/70 tabular-nums">
+                  {formatContractValue(metric, card.round!.startValue)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-white/50">
+                <span>Close value</span>
+                <span className="text-white/70 tabular-nums">
+                  {formatContractValue(metric, card.round!.endValue)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-white/50">
+                <span>Staked</span>
+                <span className="text-white/70 tabular-nums">{formatEth(card.userStake!.amount)} ETH</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {hasUserStake && isOpen && (
           <div
             className="flex items-center justify-between px-4 py-3 rounded-xl"
             style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
@@ -480,11 +655,101 @@ function MetricCard({ metric, timeframe, feed }: { metric: ActiveMetric; timefra
       </div>
     </div>
   );
+                                       }
+// ---- History panel ----
+
+const TIMEFRAME_LABEL = ["1H", "24H"];
+
+function HistoryPanel({ entries }: { entries: HistoryEntry[] }) {
+  if (entries.length === 0) return null;
+
+  // Show most recent first
+  const sorted = [...entries].sort((a, b) => b.timestamp - a.timestamp);
+
+  return (
+    <div className="mt-10">
+      <h2 className="text-xl font-bold text-white tracking-tight mb-5">Your History</h2>
+      <div className="flex flex-col gap-3">
+        {sorted.map((e) => {
+          const won = e.won;
+          const date = new Date(e.timestamp * 1000);
+          const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+          const timeStr = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+
+          // Format start/end values
+          const startBig = BigInt(e.startValue);
+          const endBig = BigInt(e.endValue);
+          const startFmt = formatContractValue(e.metric, startBig);
+          const endFmt = formatContractValue(e.metric, endBig);
+
+          return (
+            <div
+              key={`${e.metric}-${e.timeframe}-${e.roundId}`}
+              className="rounded-xl px-5 py-4"
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                border: `1px solid ${won ? "rgba(52,211,153,0.18)" : "rgba(239,68,68,0.15)"}`,
+              }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
+                    style={{
+                      background: won ? "rgba(52,211,153,0.12)" : "rgba(239,68,68,0.10)",
+                      color: won ? "#6ee7b7" : "#fca5a5",
+                    }}
+                  >
+                    {won ? "Won" : "Lost"}
+                  </span>
+                  <span className="text-sm font-semibold text-white/80">{METRIC_LABEL[e.metric]}</span>
+                  <span className="text-[10px] text-white/30 uppercase tracking-widest">{TIMEFRAME_LABEL[e.timeframe]}</span>
+                </div>
+                <span className="text-[10px] text-white/25 tabular-nums">{dateStr} {timeStr}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Your call</div>
+                  <div className="text-xs font-semibold" style={{ color: e.direction === 0 ? "#6ee7b7" : "#fca5a5" }}>
+                    {e.direction === 0 ? "Higher" : "Lower"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Entry</div>
+                  <div className="text-xs text-white/70 tabular-nums">{startFmt}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Close</div>
+                  <div className="text-xs text-white/70 tabular-nums">{endFmt}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Staked</div>
+                  <div className="text-xs text-white/70 tabular-nums">{e.amount} ETH</div>
+                </div>
+              </div>
+              {won && !e.claimed && (
+                <div className="mt-3 text-[10px] text-emerald-400/60 uppercase tracking-widest">
+                  Unclaimed winnings — claim above
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
+
+// ---- Page ----
 
 function PredictPage() {
   const [timeframe, setTimeframe] = useState<0 | 1>(0);
   const feed = useFeed();
+  const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory());
+
+  const refreshHistory = useCallback(() => {
+    setHistory(loadHistory());
+  }, []);
 
   return (
     <Layout>
@@ -529,10 +794,13 @@ function PredictPage() {
               metric={metric}
               timeframe={timeframe}
               feed={feed}
+              onHistoryUpdate={refreshHistory}
             />
           ))}
         </div>
+
+        <HistoryPanel entries={history} />
       </div>
     </Layout>
   );
-          }
+                                    }
