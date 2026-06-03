@@ -135,16 +135,32 @@ function formatValue(metric: ActiveMetric, value: number): string {
   }
 }
 
-function formatContractValue(metric: ActiveMetric, raw: bigint): string {
+// Normalize raw contract value to human-readable number
+function normalizeContractValue(metric: ActiveMetric, raw: bigint): number {
   switch (metric) {
-    case "GAS_PRICE": {
-      const gwei = Number(raw) / 1e9;
-      return gwei.toFixed(4) + " gwei";
-    }
+    case "GAS_PRICE":
+      // Stored as wei (1e9 = 1 gwei)
+      return Number(raw) / 1e9;
     case "TXS_PER_BLOCK":
-      return Number(raw).toLocaleString() + " txs";
+      // Stored as raw count, scaled by 1e2 (keeper multiplies by 100)
+      return Number(raw) / 100;
     case "ACTIVE_ADDRESSES":
-      return Number(raw).toLocaleString() + " addresses";
+      // Stored as raw count — if value > 1e12 it was accidentally stored as wei-scaled, divide by 1e18
+      // Otherwise it's a plain integer
+      if (raw > 1_000_000_000_000n) return Number(raw) / 1e18;
+      return Number(raw);
+  }
+}
+
+function formatContractValue(metric: ActiveMetric, raw: bigint): string {
+  const val = normalizeContractValue(metric, raw);
+  switch (metric) {
+    case "GAS_PRICE":
+      return val.toFixed(4) + " gwei";
+    case "TXS_PER_BLOCK":
+      return Math.round(val).toLocaleString() + " txs";
+    case "ACTIVE_ADDRESSES":
+      return Math.round(val).toLocaleString() + " addresses";
   }
 }
 
@@ -205,6 +221,53 @@ function useCountdown(endTime: bigint | undefined): string {
 }
 
 const STATUS = { OPEN: 0, RESOLVED: 1, CANCELLED: 2 };
+
+// localStorage cache key for predict history
+const PREDICT_HISTORY_KEY = "cf_predict_history_v2";
+
+type HistoryEntry = {
+  roundId: string;
+  metric: ActiveMetric;
+  timeframe: 0 | 1;
+  direction: number;
+  amount: string;
+  startValue: string;
+  endValue: string;
+  status: number;
+  result: number;
+  claimed: boolean;
+  closeTime: number;
+  savedAt: number;
+};
+
+function loadHistory(): HistoryEntry[] {
+  try {
+    const raw = localStorage.getItem(PREDICT_HISTORY_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch { return []; }
+}
+
+function saveHistory(entries: HistoryEntry[]) {
+  try {
+    // Keep last 100 entries
+    const trimmed = entries.slice(-100);
+    localStorage.setItem(PREDICT_HISTORY_KEY, JSON.stringify(trimmed));
+  } catch { /* ignore */ }
+}
+
+function upsertHistory(entry: HistoryEntry) {
+  const existing = loadHistory();
+  const idx = existing.findIndex(
+    (e) => e.roundId === entry.roundId && e.metric === entry.metric && e.timeframe === entry.timeframe
+  );
+  if (idx >= 0) {
+    existing[idx] = entry;
+  } else {
+    existing.push(entry);
+  }
+  saveHistory(existing);
+}
 
 type RoundData = {
   roundId: bigint;
@@ -282,34 +345,72 @@ function MetricCard({ metric, timeframe, feed }: {
       if (wallet) {
         const us = await contract.getUserStake(latestId, wallet);
         userStake = { amount: us[0], direction: Number(us[1]), claimed: us[2] };
+
+        // Save to history cache whenever we have a stake
+        if (us[0] > 0n) {
+          upsertHistory({
+            roundId: latestId.toString(),
+            metric,
+            timeframe,
+            direction: Number(us[1]),
+            amount: us[0].toString(),
+            startValue: raw[3].toString(),
+            endValue: raw[4].toString(),
+            status: Number(raw[9]),
+            result: Number(raw[10]),
+            claimed: us[2],
+            closeTime: Number(raw[6]),
+            savedAt: Date.now(),
+          });
+        }
       }
 
-      // Check previous round — in case a new round just opened and user's stake was on the old one
+      // Check previous rounds — scan back up to 10 to find the most recent resolved one with a stake
       let prevRound: RoundData | null = null;
       let prevUserStake: UserStake | null = null;
       if (wallet && latestId > 1n) {
-        try {
-          const prevId = latestId - 1n;
-          const prevRaw = await contract.rounds(prevId);
-          const prevStatus = Number(prevRaw[9]);
-          if (prevStatus === STATUS.RESOLVED) {
+        const maxLookback = latestId > 10n ? 10n : latestId - 1n;
+        for (let offset = 1n; offset <= maxLookback; offset++) {
+          try {
+            const prevId = latestId - offset;
+            const prevRaw = await contract.rounds(prevId);
+            const prevStatus = Number(prevRaw[9]);
             const pus = await contract.getUserStake(prevId, wallet);
+
             if (pus[0] > 0n) {
-              prevRound = {
-                roundId: prevId,
-                startValue: prevRaw[3],
-                endValue: prevRaw[4],
-                higherPool: prevRaw[7],
-                lowerPool: prevRaw[8],
+              // Save to history cache
+              upsertHistory({
+                roundId: prevId.toString(),
+                metric,
+                timeframe,
+                direction: Number(pus[1]),
+                amount: pus[0].toString(),
+                startValue: prevRaw[3].toString(),
+                endValue: prevRaw[4].toString(),
                 status: prevStatus,
                 result: Number(prevRaw[10]),
-                startTime: prevRaw[5],
-                endTime: prevRaw[6],
-              };
-              prevUserStake = { amount: pus[0], direction: Number(pus[1]), claimed: pus[2] };
+                claimed: pus[2],
+                closeTime: Number(prevRaw[6]),
+                savedAt: Date.now(),
+              });
+
+              if (prevStatus === STATUS.RESOLVED && !prevRound) {
+                prevRound = {
+                  roundId: prevId,
+                  startValue: prevRaw[3],
+                  endValue: prevRaw[4],
+                  higherPool: prevRaw[7],
+                  lowerPool: prevRaw[8],
+                  status: prevStatus,
+                  result: Number(prevRaw[10]),
+                  startTime: prevRaw[5],
+                  endTime: prevRaw[6],
+                };
+                prevUserStake = { amount: pus[0], direction: Number(pus[1]), claimed: pus[2] };
+              }
             }
-          }
-        } catch { /* best effort */ }
+          } catch { /* best effort */ }
+        }
       }
 
       setCard((c) => ({ ...c, round, userStake, prevRound, prevUserStake, loading: false }));
@@ -416,7 +517,7 @@ function MetricCard({ metric, timeframe, feed }: {
         </div>
       </div>
 
-      {/* Daily range bar */}
+        {/* Daily range bar */}
       {high > 0 && (
         <div className="px-6 pb-5">
           <div className="flex justify-between text-[9px] uppercase tracking-widest text-white/25 mb-2">
@@ -529,21 +630,6 @@ function MetricCard({ metric, timeframe, feed }: {
                 </div>
               </div>
             </div>
-            {/* Direction indicator */}
-            {(() => {
-              const entryNum = metric === "GAS_PRICE"
-                ? Number(card.round!.startValue) / 1e9
-                : Number(card.round!.startValue);
-              const isWinning = card.userStake!.direction === 0 ? current > entryNum : current < entryNum;
-              return (
-                <div
-                  className="text-[10px] uppercase tracking-widest font-bold mt-1"
-                  style={{ color: isWinning ? "#6ee7b7" : "#fca5a5" }}
-                >
-                  {isWinning ? "Currently winning" : "Currently losing"}
-                </div>
-              );
-            })()}
           </div>
         )}
 
@@ -792,4 +878,4 @@ function PredictPage() {
       </div>
     </Layout>
   );
-}
+          }
