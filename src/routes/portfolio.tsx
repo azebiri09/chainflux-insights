@@ -158,20 +158,24 @@ async function fetchAllPredictRows(wallet: string, contract: ethers.Contract): P
                 const userAmount: bigint = us[0];
                 if (userAmount === 0n) return;
                 const raw = await contract.rounds(roundId);
-                allRows.push({
-                  roundId,
-                  slot,
-                  status: Number(raw[9]),
-                  result: Number(raw[10]),
-                  startValue: raw[3],
-                  endValue: raw[4],
-                  closeTime: raw[6],
-                  higherPool: raw[7],
-                  lowerPool: raw[8],
-                  userAmount,
-                  userDirection: Number(us[1]),
-                  userClaimed: us[2],
-                });
+// raw[1] = metric, raw[2] = timeframe — validate they match this slot
+const roundMetric = Number(raw[1]);
+const roundTimeframe = Number(raw[2]);
+if (roundMetric !== slot.contractId || roundTimeframe !== slot.timeframe) return;
+allRows.push({
+  roundId,
+  slot,
+  status: Number(raw[9]),
+  result: Number(raw[10]),
+  startValue: raw[3],
+  endValue: raw[4],
+  closeTime: raw[6],
+  higherPool: raw[7],
+  lowerPool: raw[8],
+  userAmount,
+  userDirection: Number(us[1]),
+  userClaimed: us[2],
+});
               } catch { /* skip */ }
             })()
           );
@@ -489,11 +493,12 @@ function PortfolioPage() {
                     const isResolved = row.status === 1;
                     const isCancelled = row.status === 2;
 
-                    // For resolved rounds: won if direction matches result
-                    // For cancelled rounds: always treat as lost (no winner)
-                    const userWon = isResolved && row.userDirection === row.result;
-                    const userLost = (isResolved && !userWon) || isCancelled;
-
+                    // result: 0 = Higher won, 1 = Lower won (only valid when isResolved)
+// Cancelled rounds: no winner, stake should ideally be refunded by contract
+// Only show Won/Lost for truly resolved rounds
+const userWon = isResolved && row.userDirection === row.result;
+const userLost = isResolved && !userWon;
+const wasCancelled = isCancelled;
                     const justClaimed = claimedRows.has(row.roundId.toString());
                     const canClaim = userWon && !row.userClaimed && !justClaimed;
                     const alreadyClaimed = userWon && (row.userClaimed || justClaimed);
@@ -528,9 +533,11 @@ function PortfolioPage() {
                               {alreadyClaimed ? "Won" : "Won"}
                             </span>
                           ) : userLost ? (
-                            <span className="text-red-300/70 font-semibold">Lost</span>
-                          ) : (
-                            <span className="text-white/30 text-xs">—</span>
+  <span className="text-red-300/70 font-semibold">Lost</span>
+) : wasCancelled ? (
+  <span className="text-white/30 text-xs">Cancelled</span>
+) : (
+  <span className="text-white/30 text-xs">—</span>
                           )}
                         </td>
                         <td className="p-4 text-right text-white/40 text-xs tabular-nums">
