@@ -203,52 +203,6 @@ function useCountdown(endTime: bigint | undefined): string {
   if (!endTime) return "Loading";
   return formatCountdown(endTime);
 }
-// ---- History storage ----
-
-type HistoryEntry = {
-  metric: ActiveMetric;
-  timeframe: 0 | 1;
-  roundId: string;
-  direction: number;
-  amount: string;
-  startValue: string;
-  endValue: string;
-  won: boolean;
-  claimed: boolean;
-  timestamp: number;
-};
-
-const HISTORY_KEY = "cfx_predict_history";
-
-function loadHistory(): HistoryEntry[] {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as HistoryEntry[];
-  } catch {
-    return [];
-  }
-}
-
-function saveHistory(entries: HistoryEntry[]) {
-  const trimmed = entries.slice(-50);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
-}
-
-function upsertHistory(entry: HistoryEntry) {
-  const all = loadHistory();
-  const idx = all.findIndex(
-    (e) => e.roundId === entry.roundId && e.metric === entry.metric && e.timeframe === entry.timeframe
-  );
-  if (idx >= 0) {
-    all[idx] = entry;
-  } else {
-    all.push(entry);
-  }
-  saveHistory(all);
-}
-
-// ---- Component ----
 
 const STATUS = { OPEN: 0, RESOLVED: 1, CANCELLED: 2 };
 
@@ -264,7 +218,7 @@ type RoundData = {
   endTime: bigint;
 };
 
-type UserStake = { amount: bigint; direction: number; claimed: boolean; };
+type UserStake = { amount: bigint; direction: number; claimed: boolean };
 
 type CardState = {
   round: RoundData | null;
@@ -275,16 +229,14 @@ type CardState = {
   txError: string | null;
   txSuccess: string | null;
   amount: string;
-  // Previous resolved round for result display
   prevRound: RoundData | null;
   prevUserStake: UserStake | null;
 };
 
-function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
+function MetricCard({ metric, timeframe, feed }: {
   metric: ActiveMetric;
   timeframe: 0 | 1;
   feed: FeedData;
-  onHistoryUpdate: () => void;
 }) {
   const wallet = useWallet();
   const contractId = METRIC_CONTRACT_ID[metric];
@@ -326,82 +278,38 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
         startTime: raw[5],
         endTime: raw[6],
       };
-
       let userStake: UserStake | null = null;
       if (wallet) {
         const us = await contract.getUserStake(latestId, wallet);
         userStake = { amount: us[0], direction: Number(us[1]), claimed: us[2] };
       }
 
-      // Always check previous round too — this is the key fix.
-      // When a round resolves, keeper opens a new round immediately.
-      // So latestId is the NEW round, and the user's stake is on latestId - 1.
+      // Check previous round — in case a new round just opened and user's stake was on the old one
       let prevRound: RoundData | null = null;
       let prevUserStake: UserStake | null = null;
-
       if (wallet && latestId > 1n) {
         try {
           const prevId = latestId - 1n;
           const prevRaw = await contract.rounds(prevId);
           const prevStatus = Number(prevRaw[9]);
-
-          // Only care about the previous round if it's resolved
           if (prevStatus === STATUS.RESOLVED) {
-            prevRound = {
-              roundId: prevId,
-              startValue: prevRaw[3],
-              endValue: prevRaw[4],
-              higherPool: prevRaw[7],
-              lowerPool: prevRaw[8],
-              status: prevStatus,
-              result: Number(prevRaw[10]),
-              startTime: prevRaw[5],
-              endTime: prevRaw[6],
-            };
             const pus = await contract.getUserStake(prevId, wallet);
             if (pus[0] > 0n) {
-              prevUserStake = { amount: pus[0], direction: Number(pus[1]), claimed: pus[2] };
-
-              // Save to history
-              const won = prevRound.result === prevUserStake.direction;
-              const entry: HistoryEntry = {
-                metric,
-                timeframe,
-                roundId: prevId.toString(),
-                direction: prevUserStake.direction,
-                amount: formatEth(prevUserStake.amount),
-                startValue: prevRound.startValue.toString(),
-                endValue: prevRound.endValue.toString(),
-                won,
-                claimed: prevUserStake.claimed,
-                timestamp: Number(prevRound.endTime),
+              prevRound = {
+                roundId: prevId,
+                startValue: prevRaw[3],
+                endValue: prevRaw[4],
+                higherPool: prevRaw[7],
+                lowerPool: prevRaw[8],
+                status: prevStatus,
+                result: Number(prevRaw[10]),
+                startTime: prevRaw[5],
+                endTime: prevRaw[6],
               };
-              upsertHistory(entry);
-              onHistoryUpdate();
+              prevUserStake = { amount: pus[0], direction: Number(pus[1]), claimed: pus[2] };
             }
           }
-        } catch (e) {
-          // Previous round check is best-effort
-        }
-      }
-
-      // Also save current round to history if it's resolved and user has stake
-      if (wallet && userStake && userStake.amount > 0n && round.status === STATUS.RESOLVED) {
-        const won = round.result === userStake.direction;
-        const entry: HistoryEntry = {
-          metric,
-          timeframe,
-          roundId: latestId.toString(),
-          direction: userStake.direction,
-          amount: formatEth(userStake.amount),
-          startValue: round.startValue.toString(),
-          endValue: round.endValue.toString(),
-          won,
-          claimed: userStake.claimed,
-          timestamp: Number(round.endTime),
-        };
-        upsertHistory(entry);
-        onHistoryUpdate();
+        } catch { /* best effort */ }
       }
 
       setCard((c) => ({ ...c, round, userStake, prevRound, prevUserStake, loading: false }));
@@ -409,7 +317,7 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
       console.error(`Load error ${metric}:`, e?.message);
       setCard((c) => ({ ...c, loading: false }));
     }
-  }, [contractId, timeframe, wallet, metric, onHistoryUpdate]);
+  }, [contractId, timeframe, wallet, metric]);
 
   useEffect(() => {
     load();
@@ -437,23 +345,15 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
     } catch (e: any) {
       setCard((c) => ({ ...c, staking: false, txError: e?.reason || e?.message || "Transaction failed" }));
     }
-                             }
-    async function handleClaim(roundId: bigint) {
+  }
+
+  async function handleClaim(roundId: bigint) {
     if (!wallet) return;
     setCard((c) => ({ ...c, claiming: true, txError: null, txSuccess: null }));
     try {
       const contract = await getWriteContract();
       const tx = await contract.claim(roundId);
       await tx.wait();
-      const all = loadHistory();
-      const idx = all.findIndex(
-        (e) => e.roundId === roundId.toString() && e.metric === metric && e.timeframe === timeframe
-      );
-      if (idx >= 0) {
-        all[idx].claimed = true;
-        saveHistory(all);
-        onHistoryUpdate();
-      }
       setCard((c) => ({ ...c, claiming: false, txSuccess: "Winnings claimed!" }));
       load();
     } catch (e: any) {
@@ -470,15 +370,18 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
   const totalPool = card.round ? card.round.higherPool + card.round.lowerPool : 0n;
   const hasUserStake = card.userStake && card.userStake.amount > 0n;
 
-  // Current round result
+  // Current round result (round resolved and user had a stake)
   const showCurrentResult = isResolved && hasUserStake && card.round;
   const currentUserWon = showCurrentResult ? card.round!.result === card.userStake!.direction : false;
-  const canClaimCurrent = showCurrentResult && !card.userStake!.claimed;
+  const canClaimCurrent = showCurrentResult && currentUserWon && !card.userStake!.claimed;
 
-  // Previous round result (main fix — shows result when new round already opened)
+  // Previous round result (new round already opened, user's stake was on the old one)
   const showPrevResult = !showCurrentResult && card.prevRound && card.prevUserStake && card.prevUserStake.amount > 0n;
   const prevUserWon = showPrevResult ? card.prevRound!.result === card.prevUserStake!.direction : false;
-  const canClaimPrev = showPrevResult && !card.prevUserStake!.claimed;
+  const canClaimPrev = showPrevResult && prevUserWon && !card.prevUserStake!.claimed;
+
+  // Live tracker: round is open and user has a stake
+  const showLiveTracker = isOpen && hasUserStake;
 
   return (
     <div
@@ -512,6 +415,7 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
           </span>
         </div>
       </div>
+
       {/* Daily range bar */}
       {high > 0 && (
         <div className="px-6 pb-5">
@@ -530,9 +434,7 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
 
       {/* Question */}
       <div className="px-6 pb-4">
-        <p className="text-white text-lg leading-snug font-semibold">
-          {question}
-        </p>
+        <p className="text-white text-lg leading-snug font-semibold">{question}</p>
       </div>
 
       {/* Tap to reveal */}
@@ -549,9 +451,7 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
           </svg>
         </button>
         {expanded && (
-          <p className="mt-3 text-sm text-white/45 leading-relaxed">
-            {METRIC_DESCRIPTION[metric]}
-          </p>
+          <p className="mt-3 text-sm text-white/45 leading-relaxed">{METRIC_DESCRIPTION[metric]}</p>
         )}
       </div>
 
@@ -588,7 +488,66 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
         {card.txError && <div className="text-xs text-red-400/80 leading-snug">{card.txError}</div>}
         {card.txSuccess && <div className="text-xs text-emerald-400/80 leading-snug">{card.txSuccess}</div>}
 
-        {/* Previous round result — shown when new round already opened */}
+        {/* Live tracker — open round, user has a stake */}
+        {showLiveTracker && (
+          <div
+            className="rounded-xl px-5 py-4 flex flex-col gap-3"
+            style={{
+              background: "rgba(99,102,241,0.08)",
+              border: "1px solid rgba(99,102,241,0.22)",
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-widest text-indigo-300">
+                Your Position
+              </span>
+              <span className="text-[10px] uppercase tracking-widest text-white/30">
+                Closes {countdown}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              <div>
+                <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Your call</div>
+                <div className="text-sm font-semibold" style={{ color: card.userStake!.direction === 0 ? "#6ee7b7" : "#fca5a5" }}>
+                  {card.userStake!.direction === 0 ? "Higher" : "Lower"}
+                </div>
+              </div>
+              <div>
+                <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Staked</div>
+                <div className="text-sm text-white/80 tabular-nums">{formatEth(card.userStake!.amount)} ETH</div>
+              </div>
+              <div>
+                <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Entry value</div>
+                <div className="text-sm text-white/70 tabular-nums">
+                  {formatContractValue(metric, card.round!.startValue)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Current value</div>
+                <div className="text-sm text-white tabular-nums font-semibold">
+                  {formatValue(metric, current)} {METRIC_UNIT[metric]}
+                </div>
+              </div>
+            </div>
+            {/* Direction indicator */}
+            {(() => {
+              const entryNum = metric === "GAS_PRICE"
+                ? Number(card.round!.startValue) / 1e9
+                : Number(card.round!.startValue);
+              const isWinning = card.userStake!.direction === 0 ? current > entryNum : current < entryNum;
+              return (
+                <div
+                  className="text-[10px] uppercase tracking-widest font-bold mt-1"
+                  style={{ color: isWinning ? "#6ee7b7" : "#fca5a5" }}
+                >
+                  {isWinning ? "Currently winning" : "Currently losing"}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Previous round result */}
         {showPrevResult && (
           <div
             className="rounded-xl px-5 py-4 flex flex-col gap-2"
@@ -642,7 +601,7 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
                   opacity: card.claiming ? 0.6 : 1,
                 }}
               >
-                {card.claiming ? "Claiming" : "Claim Winnings"}
+                {card.claiming ? "Claiming..." : "Claim Winnings"}
               </button>
             )}
           </div>
@@ -702,12 +661,14 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
                   opacity: card.claiming ? 0.6 : 1,
                 }}
               >
-                {card.claiming ? "Claiming" : "Claim Winnings"}
+                {card.claiming ? "Claiming..." : "Claim Winnings"}
               </button>
             )}
           </div>
         )}
-         {hasUserStake && isOpen && (
+
+        {/* Active position pill when round is open and user has stake (no tracker needed above this) */}
+        {hasUserStake && isOpen && !showLiveTracker && (
           <div
             className="flex items-center justify-between px-4 py-3 rounded-xl"
             style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
@@ -719,7 +680,7 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
           </div>
         )}
 
-        {isOpen ? (
+        {isOpen && !hasUserStake ? (
           <>
             <input
               type="number"
@@ -759,9 +720,9 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
               </button>
             </div>
           </>
-        ) : !showCurrentResult && !showPrevResult && (
+        ) : !showCurrentResult && !showPrevResult && !showLiveTracker && (
           <div className="text-xs text-white/20 text-center py-1">
-            {card.loading ? "" : "Round not active"}
+            {card.loading ? "" : isOpen ? "" : "Round not active"}
           </div>
         )}
       </div>
@@ -769,95 +730,9 @@ function MetricCard({ metric, timeframe, feed, onHistoryUpdate }: {
   );
 }
 
-// ---- History panel ----
-
-const TIMEFRAME_LABEL = ["1H", "24H"];
-
-function HistoryPanel({ entries }: { entries: HistoryEntry[] }) {
-  if (entries.length === 0) return null;
-
-  const sorted = [...entries].sort((a, b) => b.timestamp - a.timestamp);
-
-  return (
-    <div className="mt-10">
-      <h2 className="text-xl font-bold text-white tracking-tight mb-5">Your History</h2>
-      <div className="flex flex-col gap-3">
-        {sorted.map((e) => {
-          const won = e.won;
-          const date = new Date(e.timestamp * 1000);
-          const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-          const timeStr = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-          const startBig = BigInt(e.startValue);
-          const endBig = BigInt(e.endValue);
-          const startFmt = formatContractValue(e.metric, startBig);
-          const endFmt = formatContractValue(e.metric, endBig);
-
-          return (
-            <div
-              key={`${e.metric}-${e.timeframe}-${e.roundId}`}
-              className="rounded-xl px-5 py-4"
-              style={{
-                background: "rgba(255,255,255,0.03)",
-                border: `1px solid ${won ? "rgba(52,211,153,0.18)" : "rgba(239,68,68,0.15)"}`,
-              }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
-                    style={{
-                      background: won ? "rgba(52,211,153,0.12)" : "rgba(239,68,68,0.10)",
-                      color: won ? "#6ee7b7" : "#fca5a5",
-                    }}
-                  >
-                    {won ? "Won" : "Lost"}
-                  </span>
-                  <span className="text-sm font-semibold text-white/80">{METRIC_LABEL[e.metric]}</span>
-                  <span className="text-[10px] text-white/30 uppercase tracking-widest">{TIMEFRAME_LABEL[e.timeframe]}</span>
-                </div>
-                <span className="text-[10px] text-white/25 tabular-nums">{dateStr} {timeStr}</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div>
-                  <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Your call</div>
-                  <div className="text-xs font-semibold" style={{ color: e.direction === 0 ? "#6ee7b7" : "#fca5a5" }}>
-                    {e.direction === 0 ? "Higher" : "Lower"}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Entry</div>
-                  <div className="text-xs text-white/70 tabular-nums">{startFmt}</div>
-                </div>
-                <div>
-                  <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Close</div>
-                  <div className="text-xs text-white/70 tabular-nums">{endFmt}</div>
-                </div>
-                <div>
-                  <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Staked</div>
-                  <div className="text-xs text-white/70 tabular-nums">{e.amount} ETH</div>
-                </div>
-              </div>
-              {won && !e.claimed && (
-                <div className="mt-3 text-[10px] text-emerald-400/60 uppercase tracking-widest">
-                  Unclaimed winnings — claim above
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-              }
-// ---- Page ----
 function PredictPage() {
   const [timeframe, setTimeframe] = useState<0 | 1>(0);
   const feed = useFeed();
-  const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory());
-
-  const refreshHistory = useCallback(() => {
-    setHistory(loadHistory());
-  }, []);
 
   return (
     <Layout>
@@ -902,13 +777,19 @@ function PredictPage() {
               metric={metric}
               timeframe={timeframe}
               feed={feed}
-              onHistoryUpdate={refreshHistory}
             />
           ))}
         </div>
 
-        <HistoryPanel entries={history} />
+        <div className="mt-12 text-center">
+          <p className="text-white/25 text-sm">
+            View your full predict history in{" "}
+            <a href="/portfolio" className="text-white/50 underline underline-offset-4 hover:text-white/70 transition-colors">
+              Portfolio
+            </a>
+          </p>
+        </div>
       </div>
     </Layout>
   );
-      }
+}
