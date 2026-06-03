@@ -30,6 +30,31 @@ export function getMetricState(metric: string, value: number): MetricState {
   return "medium";
 }
 
+// ─── PERSISTENCE ──────────────────────────────────────────────────────────────
+
+const MAX_TICKS = 7200;
+const STORAGE_KEY = (m: Market) => `chainflux_history_${m}`;
+
+function loadHistory(m: Market): number[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY(m));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.slice(-MAX_TICKS);
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(m: Market, history: number[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY(m), JSON.stringify(history.slice(-MAX_TICKS)));
+  } catch {
+    // storage full — ignore
+  }
+}
+
 // ─── PERPS ────────────────────────────────────────────────────────────────────
 
 type PerpsState = {
@@ -38,7 +63,10 @@ type PerpsState = {
 };
 
 const perpsState: PerpsState = {
-  history: { GAS: [], TXS_PER_BLOCK: [] },
+  history: {
+    GAS: loadHistory("GAS"),
+    TXS_PER_BLOCK: loadHistory("TXS_PER_BLOCK"),
+  },
   prev24: { GAS: 0, TXS_PER_BLOCK: 0 },
 };
 
@@ -57,7 +85,9 @@ async function fetchPrices() {
       } else if (perpsState.history[m].length >= 1080) {
         perpsState.prev24[m] = perpsState.history[m][0];
       }
-      perpsState.history[m] = [...perpsState.history[m].slice(-1199), value];
+      const next = [...perpsState.history[m].slice(-(MAX_TICKS - 1)), value];
+      perpsState.history[m] = next;
+      saveHistory(m, next);
     }
     perpsListeners.forEach((l) => l());
   } catch (err) {
@@ -158,4 +188,4 @@ export function useNetworkFeed(): FeedData {
     return () => { feedListeners.delete(fn); };
   }, []);
   return { ...feedState };
-                               }
+          }
