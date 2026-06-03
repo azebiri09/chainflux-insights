@@ -281,7 +281,7 @@ function TradePage() {
               <div className="mt-3 flex items-center justify-between px-4 py-3 rounded-lg bg-white/5 border border-white/10">
                 <span className="text-[11px] tracking-[0.2em] text-white/50 uppercase">You receive</span>
                 <span className="text-white tabular-nums text-sm font-semibold">
-                  {cftPreview.toFixed(2)} CFT
+                  {cftPreview.toFixed(4)} CFT
                 </span>
               </div>
             )}
@@ -405,7 +405,7 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
                 </td>
                 <td className="px-6 py-4 text-white/70">{p.leverage}×</td>
                 <td className="px-6 py-4 text-right text-white tabular-nums">
-                  {p.cftMinted.toFixed(2)} CFT
+                  {p.cftMinted.toFixed(4)} CFT
                 </td>
                 <td className="px-6 py-4 text-right text-white/80 tabular-nums">
                   {p.entryPrice.toFixed(4)}
@@ -433,4 +433,4 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
       </table>
     </div>
   );
-    }
+}
