@@ -2,7 +2,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 
 type Props = {
   data: number[];
-  timeframe: "1m" | "5m" | "15m" | "1h";
+  timeframe: "30s" | "1m" | "5m";
   type: "line" | "candle";
   height?: number;
   entryPrice?: number;
@@ -10,12 +10,10 @@ type Props = {
   direction?: "LONG" | "SHORT";
 };
 
-// Ticks per candle at 3s polling interval
 const TICKS_PER_CANDLE: Record<string, number> = {
-  "1m": 20,   // 60s / 3s
-  "5m": 100,  // 300s / 3s
-  "15m": 300, // 900s / 3s
-  "1h": 1200, // 3600s / 3s
+  "30s": 10,
+  "1m": 20,
+  "5m": 100,
 };
 
 const MAX_VISIBLE_CANDLES = 40;
@@ -45,12 +43,11 @@ export default function TradingChart({
   direction,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [candleOffset, setCandleOffset] = useState(0); // how many candles from right we've panned
-  const [zoom, setZoom] = useState(1); // 1 = default 40 candles visible
+  const [candleOffset, setCandleOffset] = useState(0);
+  const [zoom, setZoom] = useState(1);
   const dragRef = useRef<{ startX: number; startOffset: number } | null>(null);
   const lastTouchRef = useRef<{ dist: number } | null>(null);
 
-  // Reset pan when timeframe changes
   useEffect(() => { setCandleOffset(0); }, [timeframe]);
 
   const w = 800;
@@ -65,7 +62,6 @@ export default function TradingChart({
   const maxCandleOffset = Math.max(0, allCandles.length - visibleCandleCount);
   const clampedCandleOffset = Math.min(Math.max(0, candleOffset), maxCandleOffset);
 
-  // For line chart — show last N ticks based on timeframe
   const lineTickCount = Math.max(20, Math.round((ticksPerCandle * 10) / zoom));
   const maxLineOffset = Math.max(0, data.length - lineTickCount);
   const clampedLineOffset = Math.min(Math.max(0, candleOffset * ticksPerCandle), maxLineOffset);
@@ -80,7 +76,6 @@ export default function TradingChart({
     allCandles.length - clampedCandleOffset || undefined
   );
 
-  // Compute price range
   let minP: number, maxP: number;
   if (type === "candle" && visibleCandles.length) {
     minP = Math.min(...visibleCandles.map((c) => c.l));
@@ -112,7 +107,6 @@ export default function TradingChart({
   const up = currentPrice >= firstPrice;
   const color = up ? "#4ade80" : "#f87171";
 
-  // Drag handlers
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     dragRef.current = { startX: e.clientX, startOffset: clampedCandleOffset };
   }, [clampedCandleOffset]);
@@ -166,7 +160,6 @@ export default function TradingChart({
     setZoom((z) => Math.min(Math.max(0.3, z + e.deltaY * 0.001)));
   }, []);
 
-  // Grid lines
   const gridLines = [0.25, 0.5, 0.75].map((p) => (
     <line
       key={p}
@@ -179,7 +172,6 @@ export default function TradingChart({
     />
   ));
 
-  // Price labels
   const priceLabels = [0, 0.25, 0.5, 0.75, 1].map((p) => {
     const price = max - p * range;
     const y = padY + p * (height - padY * 2);
@@ -190,7 +182,6 @@ export default function TradingChart({
     );
   });
 
-  // Current price label
   const currentY = scaleY(currentPrice);
   const currentLabel = currentPrice > 0 ? (
     <g>
@@ -202,7 +193,6 @@ export default function TradingChart({
     </g>
   ) : null;
 
-  // Entry price line
   const entryLine = entryPrice ? (
     <g>
       <line x1={padX} x2={chartW - padX} y1={scaleY(entryPrice)} y2={scaleY(entryPrice)} stroke="#facc15" strokeWidth={1} strokeDasharray="6 3" opacity={0.7} />
@@ -213,7 +203,6 @@ export default function TradingChart({
     </g>
   ) : null;
 
-  // Liquidation price line
   const liqLine = liquidationPrice ? (
     <g>
       <line x1={padX} x2={chartW - padX} y1={scaleY(liquidationPrice)} y2={scaleY(liquidationPrice)} stroke="#f87171" strokeWidth={1} strokeDasharray="4 3" opacity={0.6} />
@@ -241,7 +230,6 @@ export default function TradingChart({
     onWheel,
   };
 
-  // ── Candle chart ──
   if (type === "candle") {
     if (!visibleCandles.length) {
       return (
@@ -286,7 +274,6 @@ export default function TradingChart({
     );
   }
 
-  // ── Line chart ──
   if (!visibleLine.length) {
     return (
       <svg {...svgProps}>
@@ -324,4 +311,4 @@ export default function TradingChart({
       {currentLabel}
     </svg>
   );
-    }
+      }
