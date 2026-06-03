@@ -48,7 +48,6 @@ type PredictRow = {
   userClaimed: boolean;
 };
 
-// localStorage history cache — same schema as predict.tsx
 const PREDICT_HISTORY_KEY = "cf_predict_history_v2";
 
 type HistoryEntry = {
@@ -134,7 +133,6 @@ function formatMetricValue(slot: PredictSlot, raw: bigint): string {
   if (slot.contractId === 3) {
     return Math.round(Number(raw) / 100).toLocaleString() + " txs";
   }
-  // Active Addresses
   if (raw > 1_000_000_000_000n) return Math.round(Number(raw) / 1e18).toLocaleString() + " addresses";
   return Number(raw).toLocaleString() + " addresses";
 }
@@ -201,7 +199,6 @@ function usePredictRows(wallet: string | null | undefined) {
       const provider = new ethers.JsonRpcProvider("https://sepolia-rollup.arbitrum.io/rpc");
       const contract = new ethers.Contract(PREDICT_PROXY, PREDICT_ABI, provider);
       const result = await fetchAllPredictRows(wallet, contract);
-      // Merge with cached history so nothing disappears
       const cached = loadCachedHistory();
       const onChainIds = new Set(result.map((r) => `${r.roundId}-${r.slot.contractId}-${r.slot.timeframe}`));
       const cachedOnly = cached.filter(
@@ -215,7 +212,6 @@ function usePredictRows(wallet: string | null | undefined) {
       setRows(merged);
     } catch (e) {
       console.error("Predict rows error:", e);
-      // Fall back to cache on error
       setRows(loadCachedHistory());
     } finally {
       setLoading(false);
@@ -241,13 +237,11 @@ function PortfolioPage() {
 
   const [claiming, setClaiming] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimedRows, setClaimedRows] = useState<Set<string>>(new Set());
 
   const now = Math.floor(Date.now() / 1000);
-  // Truly open: status=0 and closeTime is in the future
   const openPredicts = predictRows.filter((r) => r.status === 0 && Number(r.closeTime) > now);
-  // Pending resolution: status=0 but closeTime has passed (round closed, awaiting keeper resolve)
   const pendingPredicts = predictRows.filter((r) => r.status === 0 && Number(r.closeTime) <= now);
-  // History: resolved or cancelled
   const historyPredicts = predictRows.filter((r) => r.status !== 0);
 
   const handleClaim = async (roundId: bigint) => {
@@ -261,6 +255,8 @@ function PortfolioPage() {
       const contract = new ethers.Contract(PREDICT_PROXY, PREDICT_ABI, signer);
       const tx = await contract.claim(roundId);
       await tx.wait();
+      // Mark as claimed locally immediately so UI updates without waiting for reload
+      setClaimedRows((prev) => new Set([...prev, key]));
       await reloadPredict();
     } catch (e: any) {
       setClaimError(e?.reason || e?.message || "Claim failed");
@@ -392,7 +388,7 @@ function PortfolioPage() {
                         <td className="p-4 text-right text-white/50 tabular-nums">
                           {totalPool > 0n ? formatEth(totalPool) + " ETH" : "—"}
                         </td>
-                        <td className="p-4 text-right">
+                        <td className="p-4 text-right text-white/50 tabular-nums">
                           {isPending ? (
                             <span className="text-yellow-400/70 text-xs">Awaiting result</span>
                           ) : (
@@ -491,9 +487,17 @@ function PortfolioPage() {
                   {historyPredicts.map((row, i) => {
                     const key = `${row.roundId}-${row.slot.contractId}-${row.slot.timeframe}`;
                     const isResolved = row.status === 1;
+                    const isCancelled = row.status === 2;
+
+                    // For resolved rounds: won if direction matches result
+                    // For cancelled rounds: always treat as lost (no winner)
                     const userWon = isResolved && row.userDirection === row.result;
-                    const canClaim = isResolved && userWon && !row.userClaimed;
-                    const alreadyClaimed = isResolved && row.userClaimed;
+                    const userLost = (isResolved && !userWon) || isCancelled;
+
+                    const justClaimed = claimedRows.has(row.roundId.toString());
+                    const canClaim = userWon && !row.userClaimed && !justClaimed;
+                    const alreadyClaimed = userWon && (row.userClaimed || justClaimed);
+
                     const closeDate = new Date(Number(row.closeTime) * 1000);
                     const dateStr = closeDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
                     const timeStr = closeDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -519,26 +523,28 @@ function PortfolioPage() {
                         </td>
                         <td className="p-4 text-right text-white tabular-nums">{formatEth(row.userAmount)} ETH</td>
                         <td className="p-4 text-right">
-                          {isResolved ? (
-                            <span className={userWon ? "text-emerald-300 font-semibold" : "text-red-300/70"}>
-                              {userWon ? "Won" : "Lost"}
+                          {userWon ? (
+                            <span className="text-emerald-300 font-semibold">
+                              {alreadyClaimed ? "Won" : "Won"}
                             </span>
+                          ) : userLost ? (
+                            <span className="text-red-300/70 font-semibold">Lost</span>
                           ) : (
-                            <span className="text-white/30 text-xs">Cancelled</span>
+                            <span className="text-white/30 text-xs">—</span>
                           )}
                         </td>
                         <td className="p-4 text-right text-white/40 text-xs tabular-nums">
-                          {dateStr} {timeStr}
+                          {dateStr}<br />{timeStr}
                         </td>
                         <td className="p-4 text-right">
                           {canClaim && (
                             <button
                               onClick={() => handleClaim(row.roundId)}
                               disabled={claiming === row.roundId.toString()}
-                              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all"
                               style={{
-                                background: "rgba(52,211,153,0.15)",
-                                border: "1px solid rgba(52,211,153,0.30)",
+                                background: claiming === row.roundId.toString() ? "rgba(52,211,153,0.08)" : "rgba(52,211,153,0.18)",
+                                border: "1px solid rgba(52,211,153,0.35)",
                                 color: "#6ee7b7",
                                 opacity: claiming === row.roundId.toString() ? 0.5 : 1,
                               }}
@@ -560,4 +566,4 @@ function PortfolioPage() {
       </div>
     </Layout>
   );
-                              }
+              }
