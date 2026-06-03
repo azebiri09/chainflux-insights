@@ -13,7 +13,7 @@ export const Route = createFileRoute("/trade")({
 });
 
 const MARKETS: Market[] = ["GAS", "TXS_PER_BLOCK"];
-const TIMEFRAMES = ["1m", "5m", "15m", "1h"] as const;
+const TIMEFRAMES = ["30s", "1m", "5m"] as const;
 type Timeframe = typeof TIMEFRAMES[number];
 
 const MARKET_DISPLAY: Record<Market, string> = {
@@ -30,7 +30,7 @@ function TradePage() {
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [chartType, setChartType] = useState<"line" | "candle">("line");
-  const [timeframe, setTimeframe] = useState<Timeframe>("5m");
+  const [timeframe, setTimeframe] = useState<Timeframe>("1m");
 
   const wallet = useWallet();
   const m = useMarket(market);
@@ -217,7 +217,6 @@ function TradePage() {
           <div className="glass rounded-2xl p-6 sm:p-7">
             <div className="text-[10px] tracking-[0.3em] text-white/50 uppercase">Open Position</div>
 
-            {/* Long / Short */}
             <div className="mt-5 grid grid-cols-2 gap-3">
               <button
                 onClick={() => setDir("LONG")}
@@ -243,7 +242,6 @@ function TradePage() {
               </button>
             </div>
 
-            {/* Leverage selector */}
             <label className="block mt-7 text-[10px] tracking-[0.3em] text-white/50 uppercase">
               Leverage
             </label>
@@ -263,7 +261,6 @@ function TradePage() {
               ))}
             </div>
 
-            {/* Collateral input */}
             <label className="block mt-7 text-[10px] tracking-[0.3em] text-white/50 uppercase">
               Collateral (ETH)
             </label>
@@ -276,7 +273,6 @@ function TradePage() {
               className="mt-2 w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-lg tabular-nums focus:outline-none focus:border-white/30"
             />
 
-            {/* CFT preview */}
             {cftPreview > 0 && (
               <div className="mt-3 flex items-center justify-between px-4 py-3 rounded-lg bg-white/5 border border-white/10">
                 <span className="text-[11px] tracking-[0.2em] text-white/50 uppercase">You receive</span>
@@ -286,7 +282,6 @@ function TradePage() {
               </div>
             )}
 
-            {/* Position details */}
             <div className="mt-6 space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-white/50">Market</span>
@@ -433,4 +428,4 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
       </table>
     </div>
   );
-}
+                             }
