@@ -72,7 +72,7 @@ function getLockedQuestion(metric: ActiveMetric, roundId: bigint | undefined, _p
   const questions = QUESTION_BANK[metric];
   const seed = roundId ? Number(roundId % BigInt(questions.length)) : 0;
   return questions[seed];
-    }
+}
 
 type FeedData = {
   ACTIVE_ADDRESSES: number;
@@ -127,18 +127,13 @@ function formatValue(metric: ActiveMetric, value: number): string {
   }
 }
 
-// Normalize raw contract value to human-readable number
 function normalizeContractValue(metric: ActiveMetric, raw: bigint): number {
   switch (metric) {
     case "GAS_PRICE":
-      // Stored as wei (1e9 = 1 gwei)
       return Number(raw) / 1e9;
     case "TXS_PER_BLOCK":
-      // Stored as raw count, scaled by 1e2 (keeper multiplies by 100)
       return Number(raw) / 100;
     case "ACTIVE_ADDRESSES":
-      // Stored as raw count — if value > 1e12 it was accidentally stored as wei-scaled, divide by 1e18
-      // Otherwise it's a plain integer
       if (raw > 1_000_000_000_000n) return Number(raw) / 1e18;
       return Number(raw);
   }
@@ -214,8 +209,7 @@ function useCountdown(endTime: bigint | undefined): string {
 
 const STATUS = { OPEN: 0, RESOLVED: 1, CANCELLED: 2 };
 
-// localStorage cache key for predict history
-const PREDICT_HISTORY_KEY = "cf_predict_history_v2";
+const PREDICT_HISTORY_KEY = "cf_predict_history_v3";
 
 type HistoryEntry = {
   roundId: string;
@@ -242,10 +236,9 @@ function loadHistory(): HistoryEntry[] {
 
 function saveHistory(entries: HistoryEntry[]) {
   try {
-    // Keep last 100 entries
     const trimmed = entries.slice(-100);
     localStorage.setItem(PREDICT_HISTORY_KEY, JSON.stringify(trimmed));
-  } catch { /* ignore */ }
+  } catch { }
 }
 
 function upsertHistory(entry: HistoryEntry) {
@@ -338,7 +331,6 @@ function MetricCard({ metric, timeframe, feed }: {
         const us = await contract.getUserStake(latestId, wallet);
         userStake = { amount: us[0], direction: Number(us[1]), claimed: us[2] };
 
-        // Save to history cache whenever we have a stake
         if (us[0] > 0n) {
           upsertHistory({
             roundId: latestId.toString(),
@@ -357,7 +349,6 @@ function MetricCard({ metric, timeframe, feed }: {
         }
       }
 
-      // Check previous rounds — scan back up to 10 to find the most recent resolved one with a stake
       let prevRound: RoundData | null = null;
       let prevUserStake: UserStake | null = null;
       if (wallet && latestId > 1n) {
@@ -367,10 +358,11 @@ function MetricCard({ metric, timeframe, feed }: {
             const prevId = latestId - offset;
             const prevRaw = await contract.rounds(prevId);
             const prevStatus = Number(prevRaw[9]);
+            // Only look at rounds belonging to this metric+timeframe
+            if (Number(prevRaw[1]) !== contractId || Number(prevRaw[2]) !== timeframe) continue;
             const pus = await contract.getUserStake(prevId, wallet);
 
             if (pus[0] > 0n) {
-              // Save to history cache
               upsertHistory({
                 roundId: prevId.toString(),
                 metric,
@@ -401,7 +393,7 @@ function MetricCard({ metric, timeframe, feed }: {
                 prevUserStake = { amount: pus[0], direction: Number(pus[1]), claimed: pus[2] };
               }
             }
-          } catch { /* best effort */ }
+          } catch { }
         }
       }
 
@@ -463,17 +455,14 @@ function MetricCard({ metric, timeframe, feed }: {
   const totalPool = card.round ? card.round.higherPool + card.round.lowerPool : 0n;
   const hasUserStake = card.userStake && card.userStake.amount > 0n;
 
-  // Current round result (round resolved and user had a stake)
   const showCurrentResult = isResolved && hasUserStake && card.round;
   const currentUserWon = showCurrentResult ? card.round!.result === card.userStake!.direction : false;
   const canClaimCurrent = showCurrentResult && currentUserWon && !card.userStake!.claimed;
 
-  // Previous round result (new round already opened, user's stake was on the old one)
   const showPrevResult = !showCurrentResult && card.prevRound && card.prevUserStake && card.prevUserStake.amount > 0n;
   const prevUserWon = showPrevResult ? card.prevRound!.result === card.prevUserStake!.direction : false;
   const canClaimPrev = showPrevResult && prevUserWon && !card.prevUserStake!.claimed;
 
-  // Live tracker: round is open and user has a stake
   const showLiveTracker = isOpen && hasUserStake;
 
   return (
@@ -486,7 +475,6 @@ function MetricCard({ metric, timeframe, feed }: {
         WebkitBackdropFilter: "blur(20px)",
       }}
     >
-      {/* Top row */}
       <div className="px-6 pt-7 pb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <span
@@ -509,7 +497,6 @@ function MetricCard({ metric, timeframe, feed }: {
         </div>
       </div>
 
-        {/* Daily range bar */}
       {high > 0 && (
         <div className="px-6 pb-5">
           <div className="flex justify-between text-[9px] uppercase tracking-widest text-white/25 mb-2">
@@ -525,12 +512,10 @@ function MetricCard({ metric, timeframe, feed }: {
         </div>
       )}
 
-      {/* Question */}
       <div className="px-6 pb-4">
         <p className="text-white text-lg leading-snug font-semibold">{question}</p>
       </div>
 
-      {/* Tap to reveal */}
       <div className="px-6 pb-5">
         <button
           onClick={() => setExpanded((e) => !e)}
@@ -548,7 +533,6 @@ function MetricCard({ metric, timeframe, feed }: {
         )}
       </div>
 
-      {/* Pool split */}
       <div className="px-6 pb-5">
         <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/30 mb-2">
           <span>Higher {higherPct}%</span>
@@ -562,7 +546,6 @@ function MetricCard({ metric, timeframe, feed }: {
         </div>
       </div>
 
-      {/* Status row */}
       <div className="px-6 pb-5 flex items-center justify-between gap-2">
         <div className="text-[10px] uppercase tracking-widest text-white/30">
           {card.loading ? "Loading" : isOpen ? `Closes ${countdown}` : isResolved ? "Resolved" : "Inactive"}
@@ -576,27 +559,18 @@ function MetricCard({ metric, timeframe, feed }: {
 
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }} />
 
-      {/* Actions */}
       <div className="px-6 py-6 flex flex-col gap-3">
         {card.txError && <div className="text-xs text-red-400/80 leading-snug">{card.txError}</div>}
         {card.txSuccess && <div className="text-xs text-emerald-400/80 leading-snug">{card.txSuccess}</div>}
 
-        {/* Live tracker — open round, user has a stake */}
         {showLiveTracker && (
           <div
             className="rounded-xl px-5 py-4 flex flex-col gap-3"
-            style={{
-              background: "rgba(99,102,241,0.08)",
-              border: "1px solid rgba(99,102,241,0.22)",
-            }}
+            style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.22)" }}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-widest text-indigo-300">
-                Your Position
-              </span>
-              <span className="text-[10px] uppercase tracking-widest text-white/30">
-                Closes {countdown}
-              </span>
+              <span className="text-xs font-bold uppercase tracking-widest text-indigo-300">Your Position</span>
+              <span className="text-[10px] uppercase tracking-widest text-white/30">Closes {countdown}</span>
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
               <div>
@@ -625,7 +599,6 @@ function MetricCard({ metric, timeframe, feed }: {
           </div>
         )}
 
-        {/* Previous round result */}
         {showPrevResult && (
           <div
             className="rounded-xl px-5 py-4 flex flex-col gap-2"
@@ -685,7 +658,6 @@ function MetricCard({ metric, timeframe, feed }: {
           </div>
         )}
 
-        {/* Current round result */}
         {showCurrentResult && (
           <div
             className="rounded-xl px-5 py-4 flex flex-col gap-2"
@@ -745,7 +717,6 @@ function MetricCard({ metric, timeframe, feed }: {
           </div>
         )}
 
-        {/* Active position pill when round is open and user has stake (no tracker needed above this) */}
         {hasUserStake && isOpen && !showLiveTracker && (
           <div
             className="flex items-center justify-between px-4 py-3 rounded-xl"
@@ -870,4 +841,4 @@ function PredictPage() {
       </div>
     </Layout>
   );
-          }
+                  }
