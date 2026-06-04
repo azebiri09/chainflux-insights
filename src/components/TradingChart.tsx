@@ -29,6 +29,9 @@ const TICKS_PER_CANDLE: Record<string, number> = {
 const DEFAULT_VISIBLE_CANDLES = 40;
 const MIN_VISIBLE = 6;
 const MAX_VISIBLE = 120;
+const DEFAULT_Y_ZOOM = 1.0;
+const MIN_Y_ZOOM = 0.1;
+const MAX_Y_ZOOM = 10.0;
 
 function toCandles(data: number[], ticksPerCandle: number): Candle[] {
   const out: Candle[] = [];
@@ -57,22 +60,26 @@ export default function TradingChart({
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // offset: how many candles from the right end we've panned (0 = live)
   const [offset, setOffset] = useState(0);
-  // visibleCount: how many candles fit on screen (zoom)
   const [visibleCount, setVisibleCount] = useState(DEFAULT_VISIBLE_CANDLES);
+  const [yZoom, setYZoom] = useState(DEFAULT_Y_ZOOM);
   const [isLive, setIsLive] = useState(true);
   const [crosshair, setCrosshair] = useState<CrosshairData>(null);
 
-  // Gesture refs — never trigger re-renders
   const dragRef = useRef<{ startX: number; startOffset: number } | null>(null);
-  const pinchRef = useRef<{ dist: number; midX: number; visibleCount: number } | null>(null);
+  const pinchRef = useRef<{
+    dist: number;
+    distX: number;
+    distY: number;
+    midX: number;
+    visibleCount: number;
+    yZoom: number;
+  } | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTapRef = useRef<number>(0);
   const isTouchDragging = useRef(false);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
 
-  // SVG coordinate space
   const w = 800;
   const padY = 24;
   const padX = 8;
@@ -82,41 +89,52 @@ export default function TradingChart({
   const ticksPerCandle = TICKS_PER_CANDLE[timeframe];
   const allCandles = type === "candle" ? toCandles(data, ticksPerCandle) : [];
 
-  // Clamp offset and visibleCount
   const maxOffset = Math.max(0, allCandles.length - MIN_VISIBLE);
   const clampedOffset = Math.min(Math.max(0, offset), maxOffset);
-  const clampedVisible = Math.min(Math.max(MIN_VISIBLE, visibleCount), Math.min(MAX_VISIBLE, allCandles.length));
+  const clampedVisible = Math.min(Math.max(MIN_VISIBLE, visibleCount), Math.min(MAX_VISIBLE, Math.max(1, allCandles.length)));
 
-  // For line mode, derive equivalent
   const lineTickCount = clampedVisible * ticksPerCandle;
   const maxLineOffset = Math.max(0, data.length - lineTickCount);
   const clampedLineOffset = Math.min(clampedOffset * ticksPerCandle, maxLineOffset);
 
-  const visibleLine = data.slice(
-    Math.max(0, data.length - lineTickCount - clampedLineOffset),
-    data.length - clampedLineOffset || undefined
-  );
+  // Line mode: show data even before enough ticks for a full window
+  const lineStart = Math.max(0, data.length - lineTickCount - clampedLineOffset);
+  const lineEnd = data.length - clampedLineOffset || undefined;
+  const visibleLine = data.slice(lineStart, lineEnd);
 
   const startIdx = Math.max(0, allCandles.length - clampedVisible - clampedOffset);
   const endIdx = allCandles.length - clampedOffset || undefined;
   const visibleCandles = allCandles.slice(startIdx, endIdx);
 
-  // Price range
-  let minP: number, maxP: number;
+  // Raw price range from visible data
+  let rawMin: number, rawMax: number;
   if (type === "candle" && visibleCandles.length) {
-    minP = Math.min(...visibleCandles.map((c) => c.l));
-    maxP = Math.max(...visibleCandles.map((c) => c.h));
+    rawMin = Math.min(...visibleCandles.map((c) => c.l));
+    rawMax = Math.max(...visibleCandles.map((c) => c.h));
   } else if (visibleLine.length) {
-    minP = Math.min(...visibleLine);
-    maxP = Math.max(...visibleLine);
+    rawMin = Math.min(...visibleLine);
+    rawMax = Math.max(...visibleLine);
   } else {
-    minP = 0; maxP = 1;
+    rawMin = 0; rawMax = 1;
   }
 
-  const allPrices = [minP, maxP, ...(entryPrice ? [entryPrice] : []), ...(liquidationPrice ? [liquidationPrice] : [])];
-  const min = Math.min(...allPrices) * 0.997;
-  const max = Math.max(...allPrices) * 1.003;
-  const range = max - min || 1;
+  // Always include entry/liq in base range so lines never disappear
+  const allPrices = [
+    rawMin, rawMax,
+    ...(entryPrice ? [entryPrice] : []),
+    ...(liquidationPrice ? [liquidationPrice] : []),
+  ];
+  const baseMin = Math.min(...allPrices);
+  const baseMax = Math.max(...allPrices);
+  const baseRange = baseMax - baseMin || 1;
+
+  // Apply vertical zoom: compress the range around the midpoint
+  const mid = (baseMax + baseMin) / 2;
+  const halfRange = (baseRange / 2) / yZoom;
+  const paddedHalf = halfRange * 1.05;
+  const min = mid - paddedHalf;
+  const max = mid + paddedHalf;
+  const range = max - min;
 
   const scaleY = (v: number) => padY + (1 - (v - min) / range) * (height - padY * 2);
   const scaleX = (i: number, total: number) =>
@@ -132,20 +150,18 @@ export default function TradingChart({
   const up = currentPrice >= firstPrice;
   const color = up ? "#4ade80" : "#f87171";
 
-  // Auto-follow live: when offset is 0, we're live
   useEffect(() => {
     setIsLive(clampedOffset === 0);
   }, [clampedOffset]);
 
-  // Reset on timeframe change
   useEffect(() => {
     setOffset(0);
     setVisibleCount(DEFAULT_VISIBLE_CANDLES);
+    setYZoom(DEFAULT_Y_ZOOM);
     setIsLive(true);
     setCrosshair(null);
   }, [timeframe]);
 
-  // Convert SVG clientX to candle index and price
   const clientToChartData = useCallback((clientX: number, clientY: number) => {
     const svg = svgRef.current;
     if (!svg) return null;
@@ -177,15 +193,14 @@ export default function TradingChart({
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     if (dragRef.current) {
-      const dx = dragRef.current.startX - e.clientX;
+      const dx = e.clientX - dragRef.current.startX; // FIXED: natural direction
       const svg = svgRef.current;
       if (!svg) return;
       const pixelsPerCandle = svg.getBoundingClientRect().width / clampedVisible;
       const delta = Math.round(dx / pixelsPerCandle);
-      const newOffset = Math.min(Math.max(0, dragRef.current.startOffset + delta), maxOffset);
+      const newOffset = Math.min(Math.max(0, dragRef.current.startOffset - delta), maxOffset);
       setOffset(newOffset);
     } else {
-      // Hover crosshair
       const d = clientToChartData(e.clientX, e.clientY);
       setCrosshair(d);
     }
@@ -196,8 +211,15 @@ export default function TradingChart({
 
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    const factor = e.deltaY > 0 ? 1.12 : 0.89;
-    setVisibleCount((v) => Math.min(Math.max(MIN_VISIBLE, Math.round(v * factor)), MAX_VISIBLE));
+    if (e.shiftKey) {
+      // Shift + scroll = vertical zoom
+      const factor = e.deltaY > 0 ? 0.89 : 1.12;
+      setYZoom((v) => Math.min(Math.max(MIN_Y_ZOOM, v * factor), MAX_Y_ZOOM));
+    } else {
+      // Normal scroll = horizontal zoom
+      const factor = e.deltaY > 0 ? 1.12 : 0.89;
+      setVisibleCount((v) => Math.min(Math.max(MIN_VISIBLE, Math.round(v * factor)), MAX_VISIBLE));
+    }
   }, []);
 
   // ── Touch handlers ───────────────────────────────────────────────
@@ -211,12 +233,11 @@ export default function TradingChart({
       dragRef.current = { startX: touch.clientX, startOffset: clampedOffset };
       pinchRef.current = null;
 
-      // Double-tap detection
       const now = Date.now();
       if (now - lastTapRef.current < 300) {
-        // Double tap → reset
         setOffset(0);
         setVisibleCount(DEFAULT_VISIBLE_CANDLES);
+        setYZoom(DEFAULT_Y_ZOOM);
         setIsLive(true);
         setCrosshair(null);
         lastTapRef.current = 0;
@@ -224,27 +245,32 @@ export default function TradingChart({
       }
       lastTapRef.current = now;
 
-      // Long press → crosshair
       longPressTimer.current = setTimeout(() => {
-        isTouchDragging.current = false; // freeze pan
+        isTouchDragging.current = false;
         const d = clientToChartData(touch.clientX, touch.clientY);
         setCrosshair(d);
       }, 400);
 
     } else if (e.touches.length === 2) {
-      // Cancel single-touch mode
       if (longPressTimer.current) clearTimeout(longPressTimer.current);
       dragRef.current = null;
       setCrosshair(null);
 
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
       const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      pinchRef.current = { dist, midX, visibleCount: clampedVisible };
+
+      pinchRef.current = {
+        dist,
+        distX: Math.abs(dx),
+        distY: Math.abs(dy),
+        midX,
+        visibleCount: clampedVisible,
+        yZoom,
+      };
     }
-  }, [clampedOffset, clampedVisible, clientToChartData]);
+  }, [clampedOffset, clampedVisible, yZoom, clientToChartData]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
@@ -254,14 +280,12 @@ export default function TradingChart({
       const dx = touch.clientX - touchStartPos.current.x;
       const dy = touch.clientY - touchStartPos.current.y;
 
-      // Determine intent on first significant move
       if (!isTouchDragging.current && Math.abs(dx) > 5) {
         if (longPressTimer.current) clearTimeout(longPressTimer.current);
         isTouchDragging.current = true;
         setCrosshair(null);
       }
 
-      // If crosshair is active (long press), update crosshair position
       if (crosshair !== null && !isTouchDragging.current) {
         const d = clientToChartData(touch.clientX, touch.clientY);
         setCrosshair(d);
@@ -270,25 +294,44 @@ export default function TradingChart({
 
       if (!isTouchDragging.current) return;
 
-      // Pan
       const svg = svgRef.current;
       if (!svg) return;
       const pixelsPerCandle = svg.getBoundingClientRect().width / clampedVisible;
-      const panDx = dragRef.current.startX - touch.clientX;
+      // FIXED: natural pan direction — drag right = go to past (increase offset)
+      const panDx = touch.clientX - dragRef.current.startX;
       const delta = Math.round(panDx / pixelsPerCandle);
-      const newOffset = Math.min(Math.max(0, dragRef.current.startOffset + delta), maxOffset);
+      const newOffset = Math.min(Math.max(0, dragRef.current.startOffset - delta), maxOffset);
       setOffset(newOffset);
 
     } else if (e.touches.length === 2 && pinchRef.current) {
       if (longPressTimer.current) clearTimeout(longPressTimer.current);
 
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const scale = pinchRef.current.dist / dist;
-      const newVisible = Math.min(Math.max(MIN_VISIBLE, Math.round(pinchRef.current.visibleCount * scale)), MAX_VISIBLE);
-      setVisibleCount(newVisible);
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      // Determine axis: use whichever axis has more spread at pinch start
+      const isHorizontalPinch = pinchRef.current.distX >= pinchRef.current.distY;
+
+      if (isHorizontalPinch) {
+        // Horizontal pinch → time axis zoom
+        const scaleX = pinchRef.current.distX / Math.max(absDx, 1);
+        const newVisible = Math.min(
+          Math.max(MIN_VISIBLE, Math.round(pinchRef.current.visibleCount * scaleX)),
+          MAX_VISIBLE
+        );
+        setVisibleCount(newVisible);
+      } else {
+        // Vertical pinch → price axis zoom
+        const scaleY = pinchRef.current.distY / Math.max(absDy, 1);
+        const newYZoom = Math.min(
+          Math.max(MIN_Y_ZOOM, pinchRef.current.yZoom * scaleY),
+          MAX_Y_ZOOM
+        );
+        setYZoom(newYZoom);
+      }
     }
   }, [clampedVisible, maxOffset, crosshair, clientToChartData]);
 
@@ -298,7 +341,6 @@ export default function TradingChart({
     pinchRef.current = null;
     isTouchDragging.current = false;
     touchStartPos.current = null;
-    // Don't clear crosshair here — let it persist until next tap
   }, []);
 
   const goLive = useCallback(() => {
@@ -310,48 +352,51 @@ export default function TradingChart({
   // ── Crosshair overlay ────────────────────────────────────────────
   const crosshairEl = crosshair ? (
     <g>
-      {/* Vertical line */}
       <line x1={crosshair.x} x2={crosshair.x} y1={padY} y2={height - padY}
         stroke="rgba(255,255,255,0.35)" strokeWidth={1} strokeDasharray="3 3" />
-      {/* Horizontal line */}
       <line x1={padX} x2={chartW - padX} y1={crosshair.y} y2={crosshair.y}
         stroke="rgba(255,255,255,0.35)" strokeWidth={1} strokeDasharray="3 3" />
-      {/* Dot */}
-      <circle cx={crosshair.x} cy={crosshair.y} r={4}
-        fill="white" stroke="rgba(255,255,255,0.5)" strokeWidth={1.5} />
-      {/* Price badge on Y axis */}
-      <rect x={chartW} y={crosshair.y - 9} width={labelW - 2} height={18}
+      <circle cx={crosshair.x} cy={crosshair.y} r={5}
+        fill="white" stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
+      <rect x={chartW} y={crosshair.y - 11} width={labelW - 2} height={22}
         fill="rgba(255,255,255,0.15)" rx={3} />
-      <text x={chartW + labelW / 2 - 1} y={crosshair.y + 4}
-        fill="white" fontSize={9} fontFamily="monospace" textAnchor="middle">
+      <text x={chartW + labelW / 2 - 1} y={crosshair.y + 5}
+        fill="white" fontSize={11} fontFamily="monospace" textAnchor="middle">
         {crosshair.price.toFixed(4)}
       </text>
     </g>
   ) : null;
 
-  // ── Candle tooltip box ───────────────────────────────────────────
+  // ── Candle tooltip box — BIGGER, readable labels ─────────────────
   const tooltipEl = crosshair?.candle ? (() => {
     const c = crosshair.candle!;
     const isUp = c.c >= c.o;
     const col = isUp ? "#4ade80" : "#f87171";
     const lines = [
-      `O ${c.o.toFixed(4)}`,
-      `H ${c.h.toFixed(4)}`,
-      `L ${c.l.toFixed(4)}`,
-      `C ${c.c.toFixed(4)}`,
+      { label: "Open",  value: c.o.toFixed(4), col: col },
+      { label: "High",  value: c.h.toFixed(4), col: "rgba(255,255,255,0.9)" },
+      { label: "Low",   value: c.l.toFixed(4), col: "rgba(255,255,255,0.9)" },
+      { label: "Close", value: c.c.toFixed(4), col: col },
     ];
-    const bx = crosshair.x + 10 > chartW - 120 ? crosshair.x - 105 : crosshair.x + 10;
-    const by = Math.max(padY, crosshair.y - 50);
+    const boxW = 160;
+    const boxH = 104;
+    const bx = crosshair.x + 14 > chartW - boxW ? crosshair.x - boxW - 8 : crosshair.x + 14;
+    const by = Math.max(padY, Math.min(crosshair.y - boxH / 2, height - padY - boxH));
     return (
       <g>
-        <rect x={bx} y={by} width={95} height={72} rx={5}
-          fill="rgba(0,0,0,0.85)" stroke={col} strokeWidth={1} strokeOpacity={0.6} />
+        <rect x={bx} y={by} width={boxW} height={boxH} rx={7}
+          fill="rgba(0,0,0,0.92)" stroke={col} strokeWidth={1.5} strokeOpacity={0.8} />
         {lines.map((line, i) => (
-          <text key={i} x={bx + 8} y={by + 16 + i * 14}
-            fill={i === 0 || i === 3 ? col : "rgba(255,255,255,0.7)"}
-            fontSize={9} fontFamily="monospace">
-            {line}
-          </text>
+          <g key={i}>
+            <text x={bx + 12} y={by + 22 + i * 22}
+              fill="rgba(255,255,255,0.4)" fontSize={12} fontFamily="monospace">
+              {line.label}
+            </text>
+            <text x={bx + boxW - 12} y={by + 22 + i * 22}
+              fill={line.col} fontSize={13} fontFamily="monospace" textAnchor="end" fontWeight="600">
+              {line.value}
+            </text>
+          </g>
         ))}
       </g>
     );
@@ -432,6 +477,40 @@ export default function TradingChart({
     </g>
   ) : null;
 
+  const liveButton = !isLive ? (
+    <button
+      onClick={goLive}
+      style={{
+        position: "absolute",
+        bottom: 10,
+        right: 76,
+        display: "flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "4px 10px",
+        background: "rgba(74,222,128,0.15)",
+        border: "1px solid rgba(74,222,128,0.5)",
+        borderRadius: 5,
+        color: "#4ade80",
+        fontSize: 11,
+        fontFamily: "monospace",
+        cursor: "pointer",
+        backdropFilter: "blur(8px)",
+        letterSpacing: "0.05em",
+      }}
+    >
+      <span style={{
+        width: 6, height: 6, borderRadius: "50%",
+        background: "#4ade80",
+        boxShadow: "0 0 6px #4ade80",
+        animation: "pulse 1.5s infinite",
+        display: "inline-block",
+        flexShrink: 0,
+      }} />
+      LIVE
+    </button>
+  ) : null;
+
   // ── Candle chart ─────────────────────────────────────────────────
   if (type === "candle") {
     if (!visibleCandles.length) {
@@ -475,54 +554,21 @@ export default function TradingChart({
           {entryLine}{liqLine}{currentLabel}
           {crosshairEl}{tooltipEl}
         </svg>
-
-        {/* Live button */}
-        {!isLive && (
-          <button
-            onClick={goLive}
-            style={{
-              position: "absolute",
-              bottom: 10,
-              right: 76,
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              padding: "4px 10px",
-              background: "rgba(74,222,128,0.15)",
-              border: "1px solid rgba(74,222,128,0.5)",
-              borderRadius: 5,
-              color: "#4ade80",
-              fontSize: 11,
-              fontFamily: "monospace",
-              cursor: "pointer",
-              backdropFilter: "blur(8px)",
-              letterSpacing: "0.05em",
-            }}
-          >
-            <span style={{
-              width: 6, height: 6, borderRadius: "50%",
-              background: "#4ade80",
-              boxShadow: "0 0 6px #4ade80",
-              animation: "pulse 1.5s infinite",
-              display: "inline-block",
-              flexShrink: 0,
-            }} />
-            LIVE
-          </button>
-        )}
+        {liveButton}
       </div>
     );
   }
 
   // ── Line chart ───────────────────────────────────────────────────
-  if (!visibleLine.length) {
+  // Show chart as soon as we have at least 2 points — no waiting for full window
+  if (visibleLine.length < 2) {
     return (
       <div ref={containerRef} style={{ position: "relative" }}>
         <svg {...svgProps}>
           {gridLines}{priceLabels}
           <text x={chartW / 2} y={height / 2}
             fill="rgba(255,255,255,0.2)" fontSize={12} textAnchor="middle" fontFamily="monospace">
-            Waiting for data...
+            {data.length === 0 ? "Waiting for data..." : "Loading..."}
           </text>
         </svg>
       </div>
@@ -555,58 +601,24 @@ export default function TradingChart({
           r={4} fill={color} />
         {entryLine}{liqLine}{currentLabel}
         {crosshairEl}
-        {/* Line mode tooltip */}
         {crosshair && (
           <g>
             <rect
-              x={crosshair.x + 10 > chartW - 90 ? crosshair.x - 85 : crosshair.x + 10}
-              y={Math.max(padY, crosshair.y - 20)}
-              width={75} height={24} rx={4}
-              fill="rgba(0,0,0,0.85)" stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
+              x={crosshair.x + 10 > chartW - 90 ? crosshair.x - 95 : crosshair.x + 10}
+              y={Math.max(padY, crosshair.y - 22)}
+              width={85} height={28} rx={5}
+              fill="rgba(0,0,0,0.88)" stroke="rgba(255,255,255,0.25)" strokeWidth={1} />
             <text
-              x={(crosshair.x + 10 > chartW - 90 ? crosshair.x - 85 : crosshair.x + 10) + 8}
-              y={Math.max(padY, crosshair.y - 20) + 15}
-              fill="white" fontSize={9} fontFamily="monospace">
+              x={(crosshair.x + 10 > chartW - 90 ? crosshair.x - 95 : crosshair.x + 10) + 10}
+              y={Math.max(padY, crosshair.y - 22) + 18}
+              fill="white" fontSize={12} fontFamily="monospace" fontWeight="600">
               {crosshair.price.toFixed(4)}
             </text>
           </g>
         )}
       </svg>
-
-      {/* Live button */}
-      {!isLive && (
-        <button
-          onClick={goLive}
-          style={{
-            position: "absolute",
-            bottom: 10,
-            right: 76,
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-            padding: "4px 10px",
-            background: "rgba(74,222,128,0.15)",
-            border: "1px solid rgba(74,222,128,0.5)",
-            borderRadius: 5,
-            color: "#4ade80",
-            fontSize: 11,
-            fontFamily: "monospace",
-            cursor: "pointer",
-            backdropFilter: "blur(8px)",
-            letterSpacing: "0.05em",
-          }}
-        >
-          <span style={{
-            width: 6, height: 6, borderRadius: "50%",
-            background: "#4ade80",
-            boxShadow: "0 0 6px #4ade80",
-            animation: "pulse 1.5s infinite",
-            display: "inline-block",
-            flexShrink: 0,
-          }} />
-          LIVE
-        </button>
-      )}
+      {liveButton}
     </div>
   );
-            }
+          }
+  
