@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { MARKET_LABELS } from "@/lib/markets";
 import { closePosition, pnl, usePositions } from "@/lib/positions";
-import type { Market } from "@/lib/positions";
+import type { Market, Position } from "@/lib/positions";
 import { useWallet, connectWallet, shortAddr } from "@/lib/wallet";
 
 export const Route = createFileRoute("/portfolio")({
