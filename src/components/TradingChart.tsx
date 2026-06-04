@@ -52,7 +52,7 @@ export default function TradingChart({
   data,
   timeframe,
   type,
-  height = 300,
+  height = 420,
   entryPrice,
   liquidationPrice,
   direction,
@@ -74,13 +74,14 @@ export default function TradingChart({
     midX: number;
     visibleCount: number;
     yZoom: number;
+    isHorizontal: boolean;
   } | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTapRef = useRef<number>(0);
   const isTouchDragging = useRef(false);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
 
-  const w = 800;
+  const w = 1200;
   const padY = 24;
   const padX = 8;
   const labelW = 68;
@@ -97,7 +98,6 @@ export default function TradingChart({
   const maxLineOffset = Math.max(0, data.length - lineTickCount);
   const clampedLineOffset = Math.min(clampedOffset * ticksPerCandle, maxLineOffset);
 
-  // Line mode: show data even before enough ticks for a full window
   const lineStart = Math.max(0, data.length - lineTickCount - clampedLineOffset);
   const lineEnd = data.length - clampedLineOffset || undefined;
   const visibleLine = data.slice(lineStart, lineEnd);
@@ -106,7 +106,6 @@ export default function TradingChart({
   const endIdx = allCandles.length - clampedOffset || undefined;
   const visibleCandles = allCandles.slice(startIdx, endIdx);
 
-  // Raw price range from visible data
   let rawMin: number, rawMax: number;
   if (type === "candle" && visibleCandles.length) {
     rawMin = Math.min(...visibleCandles.map((c) => c.l));
@@ -118,7 +117,6 @@ export default function TradingChart({
     rawMin = 0; rawMax = 1;
   }
 
-  // Always include entry/liq in base range so lines never disappear
   const allPrices = [
     rawMin, rawMax,
     ...(entryPrice ? [entryPrice] : []),
@@ -128,7 +126,6 @@ export default function TradingChart({
   const baseMax = Math.max(...allPrices);
   const baseRange = baseMax - baseMin || 1;
 
-  // Apply vertical zoom: compress the range around the midpoint
   const mid = (baseMax + baseMin) / 2;
   const halfRange = (baseRange / 2) / yZoom;
   const paddedHalf = halfRange * 1.05;
@@ -193,7 +190,7 @@ export default function TradingChart({
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     if (dragRef.current) {
-      const dx = e.clientX - dragRef.current.startX; // FIXED: natural direction
+      const dx = e.clientX - dragRef.current.startX;
       const svg = svgRef.current;
       if (!svg) return;
       const pixelsPerCandle = svg.getBoundingClientRect().width / clampedVisible;
@@ -212,11 +209,9 @@ export default function TradingChart({
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     if (e.shiftKey) {
-      // Shift + scroll = vertical zoom
       const factor = e.deltaY > 0 ? 0.89 : 1.12;
       setYZoom((v) => Math.min(Math.max(MIN_Y_ZOOM, v * factor), MAX_Y_ZOOM));
     } else {
-      // Normal scroll = horizontal zoom
       const factor = e.deltaY > 0 ? 1.12 : 0.89;
       setVisibleCount((v) => Math.min(Math.max(MIN_VISIBLE, Math.round(v * factor)), MAX_VISIBLE));
     }
@@ -261,6 +256,7 @@ export default function TradingChart({
       const dist = Math.hypot(dx, dy);
       const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
 
+      // Lock axis at the moment fingers land — never re-evaluate mid-gesture
       pinchRef.current = {
         dist,
         distX: Math.abs(dx),
@@ -268,6 +264,7 @@ export default function TradingChart({
         midX,
         visibleCount: clampedVisible,
         yZoom,
+        isHorizontal: Math.abs(dx) >= Math.abs(dy),
       };
     }
   }, [clampedOffset, clampedVisible, yZoom, clientToChartData]);
@@ -278,7 +275,6 @@ export default function TradingChart({
     if (e.touches.length === 1 && dragRef.current && touchStartPos.current) {
       const touch = e.touches[0];
       const dx = touch.clientX - touchStartPos.current.x;
-      const dy = touch.clientY - touchStartPos.current.y;
 
       if (!isTouchDragging.current && Math.abs(dx) > 5) {
         if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -297,10 +293,10 @@ export default function TradingChart({
       const svg = svgRef.current;
       if (!svg) return;
       const pixelsPerCandle = svg.getBoundingClientRect().width / clampedVisible;
-      // FIXED: natural pan direction — drag right = go to past (increase offset)
       const panDx = touch.clientX - dragRef.current.startX;
       const delta = Math.round(panDx / pixelsPerCandle);
-      const newOffset = Math.min(Math.max(0, dragRef.current.startOffset - delta), maxOffset);
+      // FIXED: + delta so drag right = scroll into past (natural direction)
+      const newOffset = Math.min(Math.max(0, dragRef.current.startOffset + delta), maxOffset);
       setOffset(newOffset);
 
     } else if (e.touches.length === 2 && pinchRef.current) {
@@ -308,26 +304,23 @@ export default function TradingChart({
 
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const dist = Math.hypot(dx, dy);
       const absDx = Math.abs(dx);
       const absDy = Math.abs(dy);
 
-      // Determine axis: use whichever axis has more spread at pinch start
-      const isHorizontalPinch = pinchRef.current.distX >= pinchRef.current.distY;
-
-      if (isHorizontalPinch) {
+      // Use axis locked at pinch start
+      if (pinchRef.current.isHorizontal) {
         // Horizontal pinch → time axis zoom
-        const scaleX = Math.max(absDx, 1) / pinchRef.current.distX;
+        const scale = Math.max(absDx, 1) / pinchRef.current.distX;
         const newVisible = Math.min(
-          Math.max(MIN_VISIBLE, Math.round(pinchRef.current.visibleCount * scaleX)),
+          Math.max(MIN_VISIBLE, Math.round(pinchRef.current.visibleCount * scale)),
           MAX_VISIBLE
         );
         setVisibleCount(newVisible);
       } else {
         // Vertical pinch → price axis zoom
-        const scaleY = Math.max(absDy, 1) / pinchRef.current.distY;
+        const scale = Math.max(absDy, 1) / pinchRef.current.distY;
         const newYZoom = Math.min(
-          Math.max(MIN_Y_ZOOM, pinchRef.current.yZoom * scaleY),
+          Math.max(MIN_Y_ZOOM, pinchRef.current.yZoom * scale),
           MAX_Y_ZOOM
         );
         setYZoom(newYZoom);
@@ -367,7 +360,7 @@ export default function TradingChart({
     </g>
   ) : null;
 
-  // ── Candle tooltip box — BIGGER, readable labels ─────────────────
+  // ── Candle tooltip box ───────────────────────────────────────────
   const tooltipEl = crosshair?.candle ? (() => {
     const c = crosshair.candle!;
     const isUp = c.c >= c.o;
@@ -560,7 +553,6 @@ export default function TradingChart({
   }
 
   // ── Line chart ───────────────────────────────────────────────────
-  // Show chart as soon as we have at least 2 points — no waiting for full window
   if (visibleLine.length < 2) {
     return (
       <div ref={containerRef} style={{ position: "relative" }}>
@@ -620,5 +612,4 @@ export default function TradingChart({
       {liveButton}
     </div>
   );
-          }
-  
+              }
