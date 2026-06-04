@@ -19,16 +19,16 @@ function formatEth(val: number): string {
 
 function PortfolioPage() {
   const wallet = useWallet();
-  const { open: openPositions, history: hist, loading, refresh } = usePositions();
+  const { open: openPositions, hist } = usePositions(wallet);
+  const loading = false;
   const [closing, setClosing] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
 
-  async function handleClose(id: string, market: Market) {
+  async function handleClose(id: string, _market: Market, currentPrice: number) {
     setClosing(id);
     setCloseError(null);
     try {
-      await closePosition(id, market);
-      await refresh();
+      await closePosition(id, currentPrice);
     } catch (err: any) {
       setCloseError(err?.message?.slice(0, 120) ?? "Close failed");
     } finally {
@@ -83,7 +83,7 @@ function PortfolioPage() {
                     </thead>
                     <tbody>
                       {openPositions.map((p, i) => {
-                        const v = pnl(p, p.currentPrice ?? p.entryPrice);
+                        const v = pnl(p, p.entryPrice);
                         return (
                           <tr key={p.id} className={i % 2 ? "bg-white/[0.02]" : ""}>
                             <td className="p-4 text-white font-medium">{MARKET_LABELS[p.market] ?? p.market}</td>
@@ -94,14 +94,14 @@ function PortfolioPage() {
                             <td className="p-4 text-right text-white tabular-nums">{formatEth(p.collateral)} ETH</td>
                             <td className="p-4 text-right text-white/80 tabular-nums">{p.entryPrice.toFixed(4)}</td>
                             <td className="p-4 text-right text-white/80 tabular-nums">
-                              {(p.currentPrice ?? p.entryPrice).toFixed(4)}
+                              {p.entryPrice.toFixed(4)}
                             </td>
                             <td className={`p-4 text-right tabular-nums font-medium ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>
                               {isFinite(v) ? `${v >= 0 ? "+" : ""}${v.toFixed(4)} ETH` : "—"}
                             </td>
                             <td className="p-4 text-right">
                               <button
-                                onClick={() => handleClose(p.id, p.market)}
+                                onClick={() => handleClose(p.id, p.market, p.entryPrice)}
                                 disabled={closing === p.id}
                                 className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                                 style={{
@@ -143,7 +143,7 @@ function PortfolioPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {hist.map((p, i) => {
+                      {hist.map((p: Position, i: number) => {
                         const closePrice = typeof p.closePrice === "number" && isFinite(p.closePrice)
                           ? p.closePrice
                           : p.entryPrice;
