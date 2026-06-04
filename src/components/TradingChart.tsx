@@ -317,7 +317,7 @@ export default function TradingChart({
 
       if (isHorizontalPinch) {
         // Horizontal pinch → time axis zoom
-        const scaleX = pinchRef.current.distX / Math.max(absDx, 1);
+        const scaleX = Math.max(absDx, 1) / pinchRef.current.distX;
         const newVisible = Math.min(
           Math.max(MIN_VISIBLE, Math.round(pinchRef.current.visibleCount * scaleX)),
           MAX_VISIBLE
@@ -325,7 +325,7 @@ export default function TradingChart({
         setVisibleCount(newVisible);
       } else {
         // Vertical pinch → price axis zoom
-        const scaleY = pinchRef.current.distY / Math.max(absDy, 1);
+        const scaleY = Math.max(absDy, 1) / pinchRef.current.distY;
         const newYZoom = Math.min(
           Math.max(MIN_Y_ZOOM, pinchRef.current.yZoom * scaleY),
           MAX_Y_ZOOM
