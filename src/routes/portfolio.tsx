@@ -48,7 +48,7 @@ type PredictRow = {
   userClaimed: boolean;
 };
 
-const PREDICT_HISTORY_KEY = "cf_predict_history_v2";
+const PREDICT_HISTORY_KEY = "cf_predict_history_v3";
 
 type HistoryEntry = {
   roundId: string;
@@ -158,30 +158,30 @@ async function fetchAllPredictRows(wallet: string, contract: ethers.Contract): P
                 const userAmount: bigint = us[0];
                 if (userAmount === 0n) return;
                 const raw = await contract.rounds(roundId);
-// raw[1] = metric, raw[2] = timeframe — validate they match this slot
-const roundMetric = Number(raw[1]);
-const roundTimeframe = Number(raw[2]);
-if (roundMetric !== slot.contractId || roundTimeframe !== slot.timeframe) return;
-allRows.push({
-  roundId,
-  slot,
-  status: Number(raw[9]),
-  result: Number(raw[10]),
-  startValue: raw[3],
-  endValue: raw[4],
-  closeTime: raw[6],
-  higherPool: raw[7],
-  lowerPool: raw[8],
-  userAmount,
-  userDirection: Number(us[1]),
-  userClaimed: us[2],
-});
-              } catch { /* skip */ }
+                // Validate round belongs to this slot
+                const roundMetric = Number(raw[1]);
+                const roundTimeframe = Number(raw[2]);
+                if (roundMetric !== slot.contractId || roundTimeframe !== slot.timeframe) return;
+                allRows.push({
+                  roundId,
+                  slot,
+                  status: Number(raw[9]),
+                  result: Number(raw[10]),
+                  startValue: raw[3],
+                  endValue: raw[4],
+                  closeTime: raw[6],
+                  higherPool: raw[7],
+                  lowerPool: raw[8],
+                  userAmount,
+                  userDirection: Number(us[1]),
+                  userClaimed: us[2],
+                });
+              } catch { }
             })()
           );
         }
         await Promise.all(checks);
-      } catch { /* skip slot */ }
+      } catch { }
     })
   );
 
@@ -259,7 +259,6 @@ function PortfolioPage() {
       const contract = new ethers.Contract(PREDICT_PROXY, PREDICT_ABI, signer);
       const tx = await contract.claim(roundId);
       await tx.wait();
-      // Mark as claimed locally immediately so UI updates without waiting for reload
       setClaimedRows((prev) => new Set([...prev, key]));
       await reloadPredict();
     } catch (e: any) {
@@ -343,7 +342,7 @@ function PortfolioPage() {
           )}
         </div>
 
-       {/* Open predict positions */}
+        {/* Open predict positions */}
         <h2 className="mt-14 text-[10px] tracking-[0.3em] text-white/50 uppercase">Predict Positions</h2>
         <div className="mt-4 glass rounded-2xl overflow-hidden">
           {!wallet ? (
@@ -392,7 +391,7 @@ function PortfolioPage() {
                         <td className="p-4 text-right text-white/50 tabular-nums">
                           {totalPool > 0n ? formatEth(totalPool) + " ETH" : "—"}
                         </td>
-                        <td className="p-4 text-right text-white/50 tabular-nums">
+                        <td className="p-4 text-right">
                           {isPending ? (
                             <span className="text-yellow-400/70 text-xs">Awaiting result</span>
                           ) : (
@@ -493,12 +492,10 @@ function PortfolioPage() {
                     const isResolved = row.status === 1;
                     const isCancelled = row.status === 2;
 
-                    // result: 0 = Higher won, 1 = Lower won (only valid when isResolved)
-// Cancelled rounds: no winner, stake should ideally be refunded by contract
-// Only show Won/Lost for truly resolved rounds
-const userWon = isResolved && row.userDirection === row.result;
-const userLost = isResolved && !userWon;
-const wasCancelled = isCancelled;
+                    const userWon = isResolved && row.userDirection === row.result;
+                    const userLost = isResolved && !userWon;
+                    const wasCancelled = isCancelled;
+
                     const justClaimed = claimedRows.has(row.roundId.toString());
                     const canClaim = userWon && !row.userClaimed && !justClaimed;
                     const alreadyClaimed = userWon && (row.userClaimed || justClaimed);
@@ -529,15 +526,13 @@ const wasCancelled = isCancelled;
                         <td className="p-4 text-right text-white tabular-nums">{formatEth(row.userAmount)} ETH</td>
                         <td className="p-4 text-right">
                           {userWon ? (
-                            <span className="text-emerald-300 font-semibold">
-                              {alreadyClaimed ? "Won" : "Won"}
-                            </span>
+                            <span className="text-emerald-300 font-semibold">Won</span>
                           ) : userLost ? (
-  <span className="text-red-300/70 font-semibold">Lost</span>
-) : wasCancelled ? (
-  <span className="text-white/30 text-xs">Cancelled</span>
-) : (
-  <span className="text-white/30 text-xs">—</span>
+                            <span className="text-red-300/70 font-semibold">Lost</span>
+                          ) : wasCancelled ? (
+                            <span className="text-white/30 text-xs">Cancelled</span>
+                          ) : (
+                            <span className="text-white/30 text-xs">—</span>
                           )}
                         </td>
                         <td className="p-4 text-right text-white/40 text-xs tabular-nums">
@@ -573,4 +568,4 @@ const wasCancelled = isCancelled;
       </div>
     </Layout>
   );
-              }
+                      }
