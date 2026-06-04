@@ -198,7 +198,7 @@ export default function TradingChart({
       if (!svg) return;
       const pixelsPerCandle = svg.getBoundingClientRect().width / clampedVisible;
       const delta = Math.round(dx / pixelsPerCandle);
-      const newOffset = Math.min(Math.max(0, dragRef.current.startOffset - delta), maxOffset);
+      const newOffset = Math.min(Math.max(0, dragRef.current.startOffset + delta), maxOffset);
       setOffset(newOffset);
     } else {
       const d = clientToChartData(e.clientX, e.clientY);
