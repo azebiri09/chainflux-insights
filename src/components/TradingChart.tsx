@@ -52,7 +52,7 @@ export default function TradingChart({
   data,
   timeframe,
   type,
-  height = 420,
+  height = 500,
   entryPrice,
   liquidationPrice,
   direction,
@@ -83,7 +83,7 @@ export default function TradingChart({
 
   const w = 1200;
   const padY = 24;
-  const padX = 8;
+  const padX = 4;
   const labelW = 68;
   const chartW = w - labelW;
 
@@ -256,7 +256,8 @@ export default function TradingChart({
       const dist = Math.hypot(dx, dy);
       const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
 
-      // Lock axis at the moment fingers land — never re-evaluate mid-gesture
+      // Lock axis at the moment fingers land — requires clear directional intent
+      // Uses 1.5x threshold so ambiguous diagonals don't accidentally lock horizontal
       pinchRef.current = {
         dist,
         distX: Math.abs(dx),
@@ -264,7 +265,7 @@ export default function TradingChart({
         midX,
         visibleCount: clampedVisible,
         yZoom,
-        isHorizontal: Math.abs(dx) >= Math.abs(dy),
+        isHorizontal: Math.abs(dx) > Math.abs(dy) * 1.5,
       };
     }
   }, [clampedOffset, clampedVisible, yZoom, clientToChartData]);
@@ -295,7 +296,6 @@ export default function TradingChart({
       const pixelsPerCandle = svg.getBoundingClientRect().width / clampedVisible;
       const panDx = touch.clientX - dragRef.current.startX;
       const delta = Math.round(panDx / pixelsPerCandle);
-      // FIXED: + delta so drag right = scroll into past (natural direction)
       const newOffset = Math.min(Math.max(0, dragRef.current.startOffset + delta), maxOffset);
       setOffset(newOffset);
 
@@ -310,7 +310,7 @@ export default function TradingChart({
       // Use axis locked at pinch start
       if (pinchRef.current.isHorizontal) {
         // Horizontal pinch → time axis zoom
-        const scale = Math.max(absDx, 1) / pinchRef.current.distX;
+        const scale = Math.max(absDx, 1) / Math.max(pinchRef.current.distX, 1);
         const newVisible = Math.min(
           Math.max(MIN_VISIBLE, Math.round(pinchRef.current.visibleCount * scale)),
           MAX_VISIBLE
@@ -318,7 +318,7 @@ export default function TradingChart({
         setVisibleCount(newVisible);
       } else {
         // Vertical pinch → price axis zoom
-        const scale = Math.max(absDy, 1) / pinchRef.current.distY;
+        const scale = Math.max(absDy, 1) / Math.max(pinchRef.current.distY, 1);
         const newYZoom = Math.min(
           Math.max(MIN_Y_ZOOM, pinchRef.current.yZoom * scale),
           MAX_Y_ZOOM
@@ -612,4 +612,4 @@ export default function TradingChart({
       {liveButton}
     </div>
   );
-              }
+}
