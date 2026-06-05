@@ -97,8 +97,7 @@ function TradePage() {
     if (!m.current || sizeNum <= 0) return 0;
     const fee = sizeNum * 0.003;
     const collateral = sizeNum - fee;
-    const collateralWei = collateral * 1e18;
-    return collateralWei * leverage * 10000;
+    return collateral * leverage * 10000;
   }, [sizeNum, leverage, m.current]);
 
   const liquidationPrice = useMemo(() => {
@@ -164,7 +163,7 @@ function TradePage() {
 
         <div className="grid gap-6 lg:grid-cols-3">
 
-          {/* ── Chart panel ── */}
+          {/* Chart panel */}
           <div className="lg:col-span-2 glass rounded-2xl p-6 sm:p-8">
 
             {/* Market selector */}
@@ -264,7 +263,7 @@ function TradePage() {
             </div>
           </div>
 
-          {/* ── Position builder ── */}
+          {/* Position builder */}
           <div className="glass rounded-2xl p-6 sm:p-8">
 
             {/* Header */}
@@ -409,7 +408,7 @@ function TradePage() {
           </div>
         </div>
 
-        {/* ── Open positions ── */}
+        {/* Open positions */}
         <div className="mt-12 glass rounded-2xl overflow-hidden">
           <div className="px-7 py-6 border-b border-white/15 text-white font-medium tracking-tight">
             Open Positions
@@ -477,8 +476,8 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
                   {p.direction}
                 </td>
                 <td className="px-6 py-5 text-white/70">{p.leverage}×</td>
-                 <td className="px-6 py-5 text-right text-white tabular-nums">
-                  {p.cftMinted.toLocaleString(undefined, { maximumFractionDigits: 0 })} CFT
+                <td className="px-6 py-5 text-right text-white tabular-nums">
+                   {p.cftMinted.toLocaleString(undefined, { maximumFractionDigits: 0 })} CFT
                 </td>
                 <td className="px-6 py-5 text-right text-white/80 tabular-nums">
                   {p.entryPrice.toFixed(4)}
