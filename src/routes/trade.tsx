@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { Lock } from "@phosphor-icons/react";
 import Layout from "@/components/Layout";
 import TradingChart from "@/components/TradingChart";
 import { MARKET_UNITS, useMarket } from "@/lib/markets";
 import type { Market } from "@/lib/positions";
 import { closePosition, openPosition, pnl, usePositions, ethToCft } from "@/lib/positions";
 import { connectWallet, useWallet, shortAddr } from "@/lib/wallet";
+import { ethers } from "ethers";
 
 export const Route = createFileRoute("/trade")({
   component: TradePage,
@@ -21,22 +23,68 @@ const MARKET_DISPLAY: Record<Market, string> = {
   TXS_PER_BLOCK: "TXS PER BLOCK",
 };
 
+const TIER_NAMES = ["Unranked", "Bronze", "Silver", "Gold", "Diamond"];
+const TIER_COLORS = ["#ffffff40", "#cd7f32", "#c0c0c0", "#ffd700", "#a8d8f0"];
+const TIER_LEVERAGE = [5, 10, 20, 25, 30];
+const TIER_THRESHOLDS = [0, 5000, 50000, 200000, 500000];
+const ALL_LEVERAGES = [2, 5, 10, 15, 20, 25, 30] as const;
+type LeverageOption = typeof ALL_LEVERAGES[number];
+
+const PROXY_ADDRESS = "0x615d3801019D33609Eed27EB39D40AB49fa44fAF";
+const CHAINFLUX_ABI = [
+  "function getTierInfo(address user) view returns (uint8 tier, uint256 cftBalance, uint8 maxLeverage, uint256 nextTierThreshold)",
+];
+
+interface TierInfo {
+  tier: number;
+  cftBalance: number;
+  maxLeverage: number;
+  nextTierThreshold: number;
+}
+
+async function fetchTierInfo(address: string): Promise<TierInfo> {
+  const provider = new ethers.BrowserProvider((window as any).ethereum);
+  const contract = new ethers.Contract(PROXY_ADDRESS, CHAINFLUX_ABI, provider);
+  const result = await contract.getTierInfo(address);
+  return {
+    tier: Number(result[0]),
+    cftBalance: Number(ethers.formatUnits(result[1], 18)),
+    maxLeverage: Number(result[2]),
+    nextTierThreshold: Number(ethers.formatUnits(result[3], 18)),
+  };
+}
+
 function TradePage() {
   const [market, setMarket] = useState<Market>("GAS");
   const [dir, setDir] = useState<"LONG" | "SHORT">("LONG");
   const [size, setSize] = useState<string>("0.01");
-  const [leverage, setLeverage] = useState<2 | 5>(2);
+  const [leverage, setLeverage] = useState<LeverageOption>(2);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [chartType, setChartType] = useState<"line" | "candle">("line");
   const [timeframe, setTimeframe] = useState<Timeframe>("1m");
+  const [tierInfo, setTierInfo] = useState<TierInfo | null>(null);
 
   const wallet = useWallet();
   const m = useMarket(market);
   const { open } = usePositions(wallet);
 
   const sizeNum = Number(size) || 0;
+
+  useEffect(() => {
+    if (!wallet) { setTierInfo(null); return; }
+    fetchTierInfo(wallet).then(setTierInfo).catch(() => setTierInfo(null));
+  }, [wallet]);
+
+  // If selected leverage is now above tier max, clamp it down
+  useEffect(() => {
+    if (!tierInfo) return;
+    if (leverage > tierInfo.maxLeverage) {
+      const valid = ALL_LEVERAGES.filter(lv => lv <= tierInfo.maxLeverage);
+      setLeverage(valid[valid.length - 1] ?? 2);
+    }
+  }, [tierInfo]);
 
   const cftPreview = useMemo(() => {
     if (!m.current || sizeNum <= 0) return 0;
@@ -68,12 +116,25 @@ function TradePage() {
     try {
       await openPosition(market, dir, sizeNum, leverage);
       setTxHash("Position opened successfully!");
+      // Refresh tier info after trade
+      fetchTierInfo(wallet).then(setTierInfo).catch(() => {});
     } catch (e: any) {
       setError(e?.message || "Transaction failed");
     } finally {
       setLoading(false);
     }
   };
+
+  const maxLev = tierInfo?.maxLeverage ?? 5;
+  const userTier = tierInfo?.tier ?? 0;
+
+  // Which tier unlocks a given leverage option
+  function tierRequiredForLeverage(lv: number): number {
+    for (let t = TIER_LEVERAGE.length - 1; t >= 0; t--) {
+      if (lv <= TIER_LEVERAGE[t]) return t;
+    }
+    return 0;
+  }
 
   return (
     <Layout>
@@ -106,8 +167,6 @@ function TradePage() {
           {/* Chart panel */}
           <div className="lg:col-span-2 glass rounded-2xl p-6 sm:p-8 relative overflow-hidden">
             <div className="relative">
-
-              {/* Market selector */}
               <div className="flex flex-wrap items-center gap-2 mb-6">
                 {MARKETS.map((mm) => (
                   <button
@@ -124,7 +183,6 @@ function TradePage() {
                 ))}
               </div>
 
-              {/* Price display */}
               <div className="flex items-baseline gap-4 flex-wrap">
                 <div className="text-5xl sm:text-6xl text-white tabular-nums font-semibold tracking-tight">
                   {m.current.toFixed(4)}
@@ -144,7 +202,6 @@ function TradePage() {
                 </div>
               </div>
 
-              {/* Chart controls */}
               <div className="mt-6 flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-1">
                   {TIMEFRAMES.map((tf) => (
@@ -166,9 +223,7 @@ function TradePage() {
                   <button
                     onClick={() => setChartType("line")}
                     className={`px-3 py-1 rounded text-xs transition-colors ${
-                      chartType === "line"
-                        ? "bg-white/10 text-white"
-                        : "text-white/40 hover:text-white/70"
+                      chartType === "line" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
                     }`}
                   >
                     Line
@@ -176,9 +231,7 @@ function TradePage() {
                   <button
                     onClick={() => setChartType("candle")}
                     className={`px-3 py-1 rounded text-xs transition-colors ${
-                      chartType === "candle"
-                        ? "bg-white/10 text-white"
-                        : "text-white/40 hover:text-white/70"
+                      chartType === "candle" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
                     }`}
                   >
                     Candle
@@ -186,10 +239,7 @@ function TradePage() {
                 </div>
               </div>
 
-              <div
-                className="mt-4 rounded-xl overflow-hidden"
-                style={{ touchAction: "none" }}
-              >
+              <div className="mt-4 rounded-xl overflow-hidden" style={{ touchAction: "none" }}>
                 <TradingChart
                   data={m.history}
                   timeframe={timeframe}
@@ -215,9 +265,23 @@ function TradePage() {
 
           {/* Position builder */}
           <div className="glass rounded-2xl p-6 sm:p-7">
-            <div className="text-[10px] tracking-[0.3em] text-white/50 uppercase">Open Position</div>
+            <div className="flex items-center justify-between mb-5">
+              <div className="text-[10px] tracking-[0.3em] text-white/50 uppercase">Open Position</div>
+              {tierInfo && (
+                <div
+                  className="text-[10px] tracking-[0.2em] uppercase font-semibold px-2.5 py-1 rounded-full border"
+                  style={{
+                    color: TIER_COLORS[tierInfo.tier],
+                    borderColor: TIER_COLORS[tierInfo.tier] + "50",
+                    background: TIER_COLORS[tierInfo.tier] + "12",
+                  }}
+                >
+                  {TIER_NAMES[tierInfo.tier]}
+                </div>
+              )}
+            </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setDir("LONG")}
                 className={`relative overflow-hidden py-5 rounded-xl text-base font-semibold tracking-wide transition-all border ${
@@ -245,20 +309,42 @@ function TradePage() {
             <label className="block mt-7 text-[10px] tracking-[0.3em] text-white/50 uppercase">
               Leverage
             </label>
-            <div className="mt-2 grid grid-cols-2 gap-3">
-              {([2, 5] as const).map((lv) => (
-                <button
-                  key={lv}
-                  onClick={() => setLeverage(lv)}
-                  className={`py-3 rounded-xl text-sm font-semibold tracking-wide transition-all border ${
-                    leverage === lv
-                      ? "bg-white/10 border-white/30 text-white"
-                      : "border-white/10 text-white/50 hover:text-white hover:border-white/20"
-                  }`}
-                >
-                  {lv}×
-                </button>
-              ))}
+            <div className="mt-2 grid grid-cols-4 gap-2">
+              {ALL_LEVERAGES.map((lv) => {
+                const locked = lv > maxLev;
+                const tierNeeded = tierRequiredForLeverage(lv);
+                const isSelected = leverage === lv;
+                return (
+                  <button
+                    key={lv}
+                    onClick={() => !locked && setLeverage(lv)}
+                    disabled={locked}
+                    title={locked ? `Requires ${TIER_NAMES[tierNeeded]}` : undefined}
+                    className={`relative py-3 rounded-xl text-xs font-semibold tracking-wide transition-all border flex flex-col items-center justify-center gap-0.5 ${
+                      locked
+                        ? "border-white/5 text-white/20 cursor-not-allowed"
+                        : isSelected
+                        ? "bg-white/10 border-white/30 text-white"
+                        : "border-white/10 text-white/50 hover:text-white hover:border-white/20"
+                    }`}
+                  >
+                    {locked ? (
+                      <>
+                        <Lock size={10} weight="bold" className="opacity-40" />
+                        <span className="opacity-30">{lv}×</span>
+                        <span
+                          className="text-[8px] tracking-wide leading-none mt-0.5"
+                          style={{ color: TIER_COLORS[tierNeeded] + "90" }}
+                        >
+                          {TIER_NAMES[tierNeeded]}
+                        </span>
+                      </>
+                    ) : (
+                      <span>{lv}×</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             <label className="block mt-7 text-[10px] tracking-[0.3em] text-white/50 uppercase">
@@ -428,4 +514,4 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
       </table>
     </div>
   );
-                             }
+                }
