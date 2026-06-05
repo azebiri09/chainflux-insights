@@ -54,7 +54,6 @@ async function fetchTierInfo(address: string): Promise<TierInfo> {
   };
 }
 
-// Returns the minimum tier index required to use a given leverage
 function tierRequiredForLeverage(lv: number): number {
   for (let t = 0; t < TIER_LEVERAGE.length; t++) {
     if (lv <= TIER_LEVERAGE[t]) return t;
@@ -125,7 +124,11 @@ function TradePage() {
       setTxHash("Position opened successfully!");
       fetchTierInfo(wallet).then(setTierInfo).catch(() => {});
     } catch (e: any) {
-      setError(e?.message || "Transaction failed");
+      const msg =
+        e?.code === "ACTION_REJECTED"
+          ? "Transaction rejected."
+          : e?.reason || e?.shortMessage || "Transaction failed. Please try again.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
