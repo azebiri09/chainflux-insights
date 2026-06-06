@@ -159,7 +159,7 @@ function FeedRow({ label, unit, value, metricKey, dailyHigh, dailyLow }: { label
       className="rounded-2xl w-full overflow-hidden transition-all duration-200"
       style={{
         background: "rgba(255,255,255,0.04)",
-        border: `1px solid ${open ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.08)"}`,
+        border: `2px solid ${open ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.18)"}`,
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
       }}
@@ -272,4 +272,4 @@ function FeedPage() {
       </div>
     </Layout>
   );
-                     }
+           }
