@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
-import { MARKET_LABELS } from "@/lib/markets";
+import { MARKET_LABELS, useMarket } from "@/lib/markets";
 import { closePosition, pnl, usePositions } from "@/lib/positions";
 import type { Market, Position } from "@/lib/positions";
-import { useWallet, connectWallet, shortAddr } from "@/lib/wallet";
+import { useWallet, connectWallet } from "@/lib/wallet";
 import { ethers } from "ethers";
 
 export const Route = createFileRoute("/portfolio")({
@@ -68,7 +68,6 @@ function TierCard({ tierInfo }: { tierInfo: TierInfo }) {
       className="glass rounded-2xl p-6 sm:p-8 mb-10 relative overflow-hidden"
       style={{ borderColor: color + "30" }}
     >
-      {/* Subtle tier color glow in corner */}
       <div
         className="absolute top-0 right-0 w-48 h-48 rounded-full pointer-events-none"
         style={{
@@ -76,22 +75,15 @@ function TierCard({ tierInfo }: { tierInfo: TierInfo }) {
           transform: "translate(30%, -30%)",
         }}
       />
-
       <div className="relative">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
             <div className="text-[10px] tracking-[0.3em] text-white/40 uppercase mb-2">Your Tier</div>
-            <div
-              className="text-3xl sm:text-4xl font-bold tracking-tight"
-              style={{ color }}
-            >
+            <div className="text-3xl sm:text-4xl font-bold tracking-tight" style={{ color }}>
               {name}
             </div>
-            <div className="mt-1 text-white/50 text-sm">
-              Up to {tierInfo.maxLeverage}× leverage
-            </div>
+            <div className="mt-1 text-white/50 text-sm">Up to {tierInfo.maxLeverage}× leverage</div>
           </div>
-
           <div className="text-right">
             <div className="text-[10px] tracking-[0.3em] text-white/40 uppercase mb-2">CFT Balance</div>
             <div className="text-2xl sm:text-3xl font-semibold text-white tabular-nums">
@@ -137,9 +129,17 @@ function TierCard({ tierInfo }: { tierInfo: TierInfo }) {
   );
 }
 
+// Live prices hook for portfolio
+function useLivePrices() {
+  const gas = useMarket("GAS");
+  const txs = useMarket("TXS_PER_BLOCK");
+  return { GAS: gas.current, TXS_PER_BLOCK: txs.current };
+}
+
 function PortfolioPage() {
   const wallet = useWallet();
   const { open: openPositions, hist } = usePositions(wallet);
+  const livePrices = useLivePrices();
   const [closing, setClosing] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [tierInfo, setTierInfo] = useState<TierInfo | null>(null);
@@ -154,10 +154,11 @@ function PortfolioPage() {
       .finally(() => setTierLoading(false));
   }, [wallet]);
 
-  async function handleClose(id: string, _market: Market, currentPrice: number) {
+  async function handleClose(id: string, market: Market) {
     setClosing(id);
     setCloseError(null);
     try {
+      const currentPrice = livePrices[market] ?? 0;
       await closePosition(id, currentPrice);
       if (wallet) fetchTierInfo(wallet).then(setTierInfo).catch(() => {});
     } catch (err: any) {
@@ -221,7 +222,8 @@ function PortfolioPage() {
                     </thead>
                     <tbody>
                       {openPositions.map((p, i) => {
-                        const v = pnl(p, p.entryPrice);
+                        const currentPrice = livePrices[p.market] ?? p.entryPrice;
+                        const v = pnl(p, currentPrice);
                         return (
                           <tr key={p.id} className={i % 2 ? "bg-white/[0.02]" : ""}>
                             <td className="p-4 text-white font-medium">{MARKET_LABELS[p.market] ?? p.market}</td>
@@ -231,13 +233,15 @@ function PortfolioPage() {
                             <td className="p-4 text-white/70">{p.leverage}×</td>
                             <td className="p-4 text-right text-white tabular-nums">{formatEth(p.collateral)} ETH</td>
                             <td className="p-4 text-right text-white/80 tabular-nums">{p.entryPrice.toFixed(4)}</td>
-                            <td className="p-4 text-right text-white/80 tabular-nums">{p.entryPrice.toFixed(4)}</td>
+                            <td className="p-4 text-right text-white/80 tabular-nums">
+                              {currentPrice > 0 ? currentPrice.toFixed(4) : "—"}
+                            </td>
                             <td className={`p-4 text-right tabular-nums font-medium ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>
                               {isFinite(v) ? `${v >= 0 ? "+" : ""}${v.toFixed(4)} ETH` : "—"}
                             </td>
                             <td className="p-4 text-right">
                               <button
-                                onClick={() => handleClose(p.id, p.market, p.entryPrice)}
+                                onClick={() => handleClose(p.id, p.market)}
                                 disabled={closing === p.id}
                                 className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                                 style={{
@@ -286,7 +290,14 @@ function PortfolioPage() {
                         const v = pnl(p, closePrice);
                         return (
                           <tr key={p.id} className={i % 2 ? "bg-white/[0.02]" : ""}>
-                            <td className="p-4 text-white">{MARKET_LABELS[p.market] ?? p.market}</td>
+                            <td className="p-4 text-white">
+                              <div>{MARKET_LABELS[p.market] ?? p.market}</div>
+                              {p.liquidated && (
+                                <div className="text-[10px] tracking-widest uppercase text-red-400/80 mt-0.5">
+                                  Liquidated
+                                </div>
+                              )}
+                            </td>
                             <td className={`p-4 ${p.direction === "LONG" ? "text-emerald-300" : "text-red-300"}`}>
                               {p.direction}
                             </td>
@@ -313,4 +324,4 @@ function PortfolioPage() {
       </div>
     </Layout>
   );
-}
+  }
