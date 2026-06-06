@@ -26,7 +26,6 @@ const MARKET_DISPLAY: Record<Market, string> = {
 const TIER_NAMES = ["Unranked", "Bronze", "Silver", "Gold", "Diamond"];
 const TIER_COLORS = ["#ffffff40", "#cd7f32", "#c0c0c0", "#ffd700", "#a8d8f0"];
 const TIER_LEVERAGE = [5, 10, 20, 25, 30];
-const TIER_THRESHOLDS = [0, 5000, 50000, 200000, 500000];
 const ALL_LEVERAGES = [2, 5, 10, 15, 20, 25, 30] as const;
 type LeverageOption = typeof ALL_LEVERAGES[number];
 
@@ -34,6 +33,8 @@ const PROXY_ADDRESS = "0x615d3801019D33609Eed27EB39D40AB49fa44fAF";
 const CHAINFLUX_ABI = [
   "function getTierInfo(address user) view returns (uint8 tier, uint256 cftBalance, uint8 maxLeverage, uint256 nextTierThreshold)",
 ];
+
+const CFT_MIN_HOLD = 1200;
 
 interface TierInfo {
   tier: number;
@@ -59,6 +60,32 @@ function tierRequiredForLeverage(lv: number): number {
     if (lv <= TIER_LEVERAGE[t]) return t;
   }
   return TIER_LEVERAGE.length - 1;
+}
+
+function useCFTCountdown(openedAt: number) {
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  useEffect(() => {
+    const update = () => {
+      const elapsed = Math.floor(Date.now() / 1000) - openedAt;
+      setSecondsLeft(Math.max(0, CFT_MIN_HOLD - elapsed));
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [openedAt]);
+  return secondsLeft;
+}
+
+function CFTCountdown({ openedAt }: { openedAt: number }) {
+  const secondsLeft = useCFTCountdown(openedAt);
+  if (secondsLeft === 0) return <span className="text-emerald-400 text-xs font-medium">CFT ready</span>;
+  const m = Math.floor(secondsLeft / 60);
+  const s = secondsLeft % 60;
+  return (
+    <span className="text-white/40 text-xs tabular-nums">
+      CFT in {m}:{s.toString().padStart(2, "0")}
+    </span>
+  );
 }
 
 function TradePage() {
@@ -96,7 +123,7 @@ function TradePage() {
     if (!m.current || sizeNum <= 0) return 0;
     const fee = sizeNum * 0.003;
     const collateral = sizeNum - fee;
-    return collateral * leverage * 10000;
+    return collateral * leverage * 1000;
   }, [sizeNum, leverage, m.current]);
 
   const liquidationPrice = useMemo(() => {
@@ -169,7 +196,6 @@ function TradePage() {
           {/* Chart panel */}
           <div className="lg:col-span-2 glass rounded-2xl p-6 sm:p-8">
 
-            {/* Market selector */}
             <div className="flex flex-wrap items-center gap-2 mb-7">
               {MARKETS.map((mm) => (
                 <button
@@ -186,7 +212,6 @@ function TradePage() {
               ))}
             </div>
 
-            {/* Price display */}
             <div className="flex items-baseline gap-4 flex-wrap">
               <div className="text-5xl sm:text-6xl text-white tabular-nums font-semibold tracking-tight">
                 {m.current.toFixed(4)}
@@ -205,7 +230,6 @@ function TradePage() {
               </div>
             </div>
 
-            {/* Chart controls */}
             <div className="mt-7 pt-6 border-t border-white/10 flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-1">
                 {TIMEFRAMES.map((tf) => (
@@ -213,9 +237,7 @@ function TradePage() {
                     key={tf}
                     onClick={() => setTimeframe(tf)}
                     className={`px-3 py-1.5 rounded text-xs tracking-wider uppercase transition-colors ${
-                      timeframe === tf
-                        ? "bg-white/10 text-white"
-                        : "text-white/40 hover:text-white/70"
+                      timeframe === tf ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
                     }`}
                   >
                     {tf}
@@ -242,7 +264,6 @@ function TradePage() {
               </div>
             </div>
 
-            {/* Chart */}
             <div className="mt-5 rounded-xl overflow-hidden" style={{ touchAction: "none" }}>
               <TradingChart
                 data={m.history}
@@ -269,7 +290,6 @@ function TradePage() {
           {/* Position builder */}
           <div className="glass rounded-2xl p-6 sm:p-8">
 
-            {/* Header */}
             <div className="flex items-center justify-between mb-7 pb-5 border-b border-white/10">
               <div className="text-xs tracking-[0.25em] text-white/60 uppercase font-medium">Open Position</div>
               {tierInfo && (
@@ -286,7 +306,6 @@ function TradePage() {
               )}
             </div>
 
-            {/* Direction */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setDir("LONG")}
@@ -312,7 +331,6 @@ function TradePage() {
               </button>
             </div>
 
-            {/* Leverage */}
             <div className="mt-8 pt-6 border-t border-white/10">
               <div className="text-xs tracking-[0.25em] text-white/60 uppercase font-medium mb-3">Leverage</div>
               <div className="grid grid-cols-4 gap-2">
@@ -335,26 +353,25 @@ function TradePage() {
                       }`}
                     >
                       {locked ? (
-  <>
-    <Lock size={12} weight="bold" className="opacity-50" />
-    <span className="opacity-41 text-sm font-semibold">{lv}×</span>
-    <span
-      className="text-[11px] tracking-wide leading-none mt-1 font-semibold"
-      style={{ color: TIER_COLORS[tierNeeded] }}
-    >
-      {TIER_NAMES[tierNeeded]}
-    </span>
-  </>
-) : (
-  <span className="text-sm font-semibold">{lv}×</span>
-)}
+                        <>
+                          <Lock size={12} weight="bold" className="opacity-50" />
+                          <span className="opacity-40 text-sm font-semibold">{lv}×</span>
+                          <span
+                            className="text-[11px] tracking-wide leading-none mt-1 font-semibold"
+                            style={{ color: TIER_COLORS[tierNeeded] }}
+                          >
+                            {TIER_NAMES[tierNeeded]}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-sm font-semibold">{lv}×</span>
+                      )}
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Collateral */}
             <div className="mt-8 pt-6 border-t border-white/10">
               <label className="block text-xs tracking-[0.25em] text-white/60 uppercase font-medium mb-3">
                 Collateral (ETH)
@@ -377,7 +394,6 @@ function TradePage() {
               )}
             </div>
 
-            {/* Order summary */}
             <div className="mt-8 pt-6 border-t border-white/10 space-y-4">
               {[
                 { label: "Market", value: MARKET_DISPLAY[market], className: "text-white" },
@@ -395,7 +411,6 @@ function TradePage() {
               ))}
             </div>
 
-            {/* CTA */}
             <button
               disabled={!wallet || loading || sizeNum < 0.001}
               onClick={onOpen}
@@ -411,7 +426,6 @@ function TradePage() {
           </div>
         </div>
 
-        {/* Open positions */}
         <div className="mt-12 glass rounded-2xl overflow-hidden">
           <div className="px-7 py-6 border-b border-white/15 text-white font-medium tracking-tight">
             Open Positions
@@ -480,14 +494,11 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
                 </td>
                 <td className="px-6 py-5 text-white/70">{p.leverage}×</td>
                 <td className="px-6 py-5 text-right text-white tabular-nums">
-                   {p.cftMinted.toLocaleString(undefined, { maximumFractionDigits: 0 })} CFT
+                  <div>{p.cftMinted.toLocaleString(undefined, { maximumFractionDigits: 0 })} CFT</div>
+                  <CFTCountdown openedAt={p.openedAt} />
                 </td>
-                <td className="px-6 py-5 text-right text-white/80 tabular-nums">
-                  {p.entryPrice.toFixed(4)}
-                </td>
-                <td className="px-6 py-5 text-right text-red-300 tabular-nums">
-                  {liqPrice.toFixed(4)}
-                </td>
+                <td className="px-6 py-5 text-right text-white/80 tabular-nums">{p.entryPrice.toFixed(4)}</td>
+                <td className="px-6 py-5 text-right text-red-300 tabular-nums">{liqPrice.toFixed(4)}</td>
                 <td className="px-6 py-5 text-right text-white tabular-nums">{cur.toFixed(4)}</td>
                 <td className={`px-6 py-5 text-right tabular-nums font-medium ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>
                   {v.toFixed(4)} ETH
@@ -508,4 +519,4 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
       </table>
     </div>
   );
-}
+                }
