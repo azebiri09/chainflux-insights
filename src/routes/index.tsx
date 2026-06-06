@@ -31,9 +31,12 @@ function Index() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&display=swap');
         .headline { font-family: 'Playfair Display', Georgia, serif; }
+        .hero-text { color: #ffffff !important; }
+        .hero-subtext { color: rgba(255,255,255,0.55) !important; }
+        .hero-span { color: rgba(255,255,255,0.60) !important; }
       `}</style>
 
-      {/* Hero */}
+      {/* Hero — always dark, sits over a background image */}
       <section className="relative min-h-[100svh] flex items-center overflow-hidden">
         <div
           className="absolute inset-0"
@@ -45,12 +48,12 @@ function Index() {
         />
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,1) 100%)" }} />
         <div className="relative w-full px-5 sm:px-10 pt-32 pb-24 text-center rise">
-          <h1 className="headline mt-8 text-5xl sm:text-7xl md:text-[5.5rem] font-semibold tracking-tight text-white leading-[1.08]">
+          <h1 className="headline hero-text mt-8 text-5xl sm:text-7xl md:text-[5.5rem] font-semibold tracking-tight leading-[1.08]">
             Markets powered by
             <br />
-            <span className="text-white/60">onchain activity</span>
+            <span className="hero-span">onchain activity</span>
           </h1>
-          <p className="mt-8 text-base sm:text-lg text-white/55 max-w-xl mx-auto leading-relaxed">
+          <p className="hero-subtext mt-8 text-base sm:text-lg max-w-xl mx-auto leading-relaxed">
             Trade gas fees and transaction throughput on Arbitrum in real time. The network is the market.
           </p>
           <div className="mt-12">
@@ -225,4 +228,4 @@ function Index() {
 
     </Layout>
   );
-    }
+  }
