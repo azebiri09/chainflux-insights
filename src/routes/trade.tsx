@@ -335,19 +335,19 @@ function TradePage() {
                       }`}
                     >
                       {locked ? (
-                        <>
-                          <Lock size={10} weight="bold" className="opacity-40" />
-                          <span className="opacity-30">{lv}×</span>
-                          <span
-                            className="text-[8px] tracking-wide leading-none mt-0.5"
-                            style={{ color: TIER_COLORS[tierNeeded] + "90" }}
-                          >
-                            {TIER_NAMES[tierNeeded]}
-                          </span>
-                        </>
-                      ) : (
-                        <span>{lv}×</span>
-                      )}
+  <>
+    <Lock size={12} weight="bold" className="opacity-50" />
+    <span className="opacity-40 text-sm font-semibold">{lv}×</span>
+    <span
+      className="text-[11px] tracking-wide leading-none mt-1 font-semibold"
+      style={{ color: TIER_COLORS[tierNeeded] }}
+    >
+      {TIER_NAMES[tierNeeded]}
+    </span>
+  </>
+) : (
+  <span className="text-sm font-semibold">{lv}×</span>
+)}
                     </button>
                   );
                 })}
@@ -365,7 +365,7 @@ function TradePage() {
                 type="number"
                 min="0.001"
                 step="0.001"
-                className="w-full bg-white/5 border border-white/12 rounded-xl px-4 py-3.5 text-white text-lg tabular-nums focus:outline-none focus:border-white/30"
+                className="w-full bg-white/5 border border-white/12 rounded-xl px-4 py-4 text-white text-lg tabular-nums focus:outline-none focus:border-white/30"
               />
               {cftPreview > 0 && (
                 <div className="mt-3 flex items-center justify-between px-4 py-3.5 rounded-xl bg-white/5 border border-white/10">
