@@ -67,7 +67,7 @@ function Index() {
 
       {/* What is ChainFlux */}
       <section className="w-full px-5 sm:px-10 py-24 max-w-4xl mx-auto">
-        <div className="text-xs tracking-[0.3em] text-white/40 uppercase mb-5">What is ChainFlux</div>
+        <div className="text-base tracking-[0.2em] text-white/60 uppercase mb-5 font-semibold">What is ChainFlux</div>
         <h2 className="headline text-4xl sm:text-5xl font-semibold text-white leading-[1.12] mb-8">
           A perpetual trading platform for Ethereum network activity.
         </h2>
@@ -81,11 +81,11 @@ function Index() {
 
       {/* Markets */}
       <section className="w-full px-5 sm:px-10 pb-24 max-w-4xl mx-auto">
-        <div className="text-xs tracking-[0.3em] text-white/40 uppercase mb-8">Markets</div>
+        <div className="text-base tracking-[0.2em] text-white/60 uppercase mb-8 font-semibold">Markets</div>
         <div className="flex flex-col gap-6">
 
           <div className="glass rounded-2xl p-8">
-            <div className="text-[10px] tracking-[0.3em] text-white/35 uppercase mb-3">Gas</div>
+            <div className="text-xs tracking-[0.3em] text-white/40 uppercase mb-3">Gas</div>
             <h3 className="headline text-2xl sm:text-3xl font-semibold text-white mb-5">Gas Price</h3>
             <div className="space-y-3 text-white/60 text-base leading-relaxed">
               <p>Gas Price measures how much users are willing to pay to have their transactions included on Ethereum.</p>
@@ -95,7 +95,7 @@ function Index() {
           </div>
 
           <div className="glass rounded-2xl p-8">
-            <div className="text-[10px] tracking-[0.3em] text-white/35 uppercase mb-3">TXS_PER_BLOCK</div>
+            <div className="text-xs tracking-[0.3em] text-white/40 uppercase mb-3">TXS_PER_BLOCK</div>
             <h3 className="headline text-2xl sm:text-3xl font-semibold text-white mb-5">Transactions Per Block</h3>
             <div className="space-y-3 text-white/60 text-base leading-relaxed">
               <p>Transactions Per Block measures how many transactions are included in each Ethereum block.</p>
@@ -109,7 +109,7 @@ function Index() {
 
       {/* Why it exists */}
       <section className="w-full px-5 sm:px-10 py-24 max-w-4xl mx-auto">
-        <div className="text-xs tracking-[0.3em] text-white/40 uppercase mb-5">Why it exists</div>
+        <div className="text-base tracking-[0.2em] text-white/60 uppercase mb-5 font-semibold">Why it exists</div>
         <h2 className="headline text-4xl sm:text-5xl font-semibold text-white leading-[1.12] mb-8">
           Price is the last thing to move.
         </h2>
@@ -122,10 +122,9 @@ function Index() {
 
       {/* How it works */}
       <section className="w-full px-5 sm:px-10 py-20 max-w-4xl mx-auto">
-        <div className="text-xs tracking-[0.3em] text-white/40 uppercase mb-3">How it works</div>
+        <div className="text-base tracking-[0.2em] text-white/60 uppercase mb-3 font-semibold">How it works</div>
         <h2 className="headline text-4xl sm:text-5xl font-semibold text-white leading-[1.12] mb-12">Simple by design.</h2>
         <div className="flex flex-col gap-5">
-
           {[
             {
               step: "Step 1",
@@ -149,18 +148,17 @@ function Index() {
             },
           ].map((s, i) => (
             <div key={i} className="glass rounded-2xl p-7 sm:p-8">
-              <div className="text-[10px] tracking-[0.3em] text-white/35 uppercase mb-3">{s.step}</div>
+              <div className="text-xs tracking-[0.3em] text-white/40 uppercase mb-3">{s.step}</div>
               <div className="headline text-xl sm:text-2xl font-semibold text-white mb-3">{s.title}</div>
               <p className="text-white/60 text-base leading-relaxed">{s.body}</p>
             </div>
           ))}
-
         </div>
       </section>
 
       {/* Network feed preview */}
       <section className="w-full px-5 sm:px-10 py-24 max-w-4xl mx-auto">
-        <div className="text-xs tracking-[0.3em] text-white/40 uppercase mb-3">Network Feed</div>
+        <div className="text-base tracking-[0.2em] text-white/60 uppercase mb-3 font-semibold">Network Feed</div>
         <h2 className="headline text-4xl sm:text-5xl font-semibold text-white leading-[1.12] mb-5">Live from the chain.</h2>
         <p className="text-white/50 text-base sm:text-lg leading-relaxed mb-12">
           Watch gas and transaction activity update in real time. This is the data your positions are built on.
@@ -169,7 +167,7 @@ function Index() {
           {(["GAS", "TXS_PER_BLOCK"] as const).map((k) => (
             <div key={k} className="glass rounded-2xl p-7">
               <div className="flex items-baseline justify-between mb-4">
-                <div className="text-[10px] tracking-[0.3em] text-white/35 uppercase">{k.replace(/_/g, " ")}</div>
+                <div className="text-xs tracking-[0.3em] text-white/40 uppercase">{k.replace(/_/g, " ")}</div>
                 <div className="text-xl text-white tabular-nums font-semibold">{all[k].current.toFixed(2)}</div>
               </div>
               <div className="text-white/50">
@@ -182,7 +180,7 @@ function Index() {
 
       {/* Leaderboard preview */}
       <section className="w-full px-5 sm:px-10 py-24 max-w-4xl mx-auto">
-        <div className="text-xs tracking-[0.3em] text-white/40 uppercase mb-3">Leaderboard</div>
+        <div className="text-base tracking-[0.2em] text-white/60 uppercase mb-3 font-semibold">Leaderboard</div>
         <h2 className="headline text-4xl sm:text-5xl font-semibold text-white leading-[1.12] mb-5">Who is calling it right.</h2>
         <p className="text-white/50 text-base sm:text-lg leading-relaxed mb-12">
           The best onchain traders, ranked by total PnL.
@@ -227,4 +225,4 @@ function Index() {
 
     </Layout>
   );
-      }
+    }
