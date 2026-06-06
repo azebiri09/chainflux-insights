@@ -37,7 +37,7 @@
 /* ===== DARK MODE (default) ===== */
 :root {
   --radius: 0.75rem;
-  --background: #000000;
+  --background: #000001;
   --foreground: oklch(0.98 0.005 250);
   --card: oklch(0.10 0.005 260);
   --card-foreground: oklch(0.98 0.005 250);
