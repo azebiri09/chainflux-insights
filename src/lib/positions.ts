@@ -6,13 +6,14 @@ export type Position = {
   id: string;
   market: Market;
   direction: "LONG" | "SHORT";
-  leverage: 2 | 5;
+  leverage: number;
   collateral: number;
   entryPrice: number;
   openedAt: number;
   closedAt?: number;
   closePrice?: number;
   cftMinted: number;
+  liquidated?: boolean;
 };
 
 const PROXY_ADDRESS = "0x615d3801019D33609Eed27EB39D40AB49fa44fAF";
@@ -44,11 +45,11 @@ function readHist(): Position[] {
 function writeHist(v: Position[]) {
   localStorage.setItem(HIST_KEY, JSON.stringify(v));
 }
-function readLevMap(): Record<string, 2 | 5> {
+function readLevMap(): Record<string, number> {
   if (typeof window === "undefined") return {};
   try { return JSON.parse(localStorage.getItem(LEV_KEY) || "{}"); } catch { return {}; }
 }
-function writeLevMap(v: Record<string, 2 | 5>) {
+function writeLevMap(v: Record<string, number>) {
   localStorage.setItem(LEV_KEY, JSON.stringify(v));
 }
 
@@ -81,11 +82,46 @@ function decodeRevertReason(err: any): string {
   }
 }
 
+// Check if a position has been liquidated based on current price.
+// Liquidation threshold: 80% of margin lost.
+export function isLiquidated(p: Position, currentPrice: number): boolean {
+  const moveToLiq = 0.8 / p.leverage;
+  if (p.direction === "LONG") {
+    return currentPrice <= p.entryPrice * (1 - moveToLiq);
+  } else {
+    return currentPrice >= p.entryPrice * (1 + moveToLiq);
+  }
+}
+
+// Call this from the trade page on every price tick to auto-liquidate frontend state.
+export function checkLiquidations(prices: Record<Market, number>): void {
+  const toLiquidate = cachedOpen.filter((p) => isLiquidated(p, prices[p.market] ?? 0));
+  if (!toLiquidate.length) return;
+
+  const hist = readHist();
+  toLiquidate.forEach((p) => {
+    const liqPrice = p.direction === "LONG"
+      ? p.entryPrice * (1 - 0.8 / p.leverage)
+      : p.entryPrice * (1 + 0.8 / p.leverage);
+    hist.unshift({
+      ...p,
+      closePrice: liqPrice,
+      closedAt: Date.now(),
+      liquidated: true,
+    });
+  });
+  writeHist(hist);
+
+  cachedOpen = cachedOpen.filter((p) => !isLiquidated(p, prices[p.market] ?? 0));
+  cachedHist = hist;
+  notify();
+}
+
 export async function openPosition(
   market: Market,
   direction: "LONG" | "SHORT",
   collateralEth: number,
-  leverage: 2 | 5
+  leverage: number
 ): Promise<void> {
   if (!window.ethereum) throw new Error("No wallet");
   const provider = new ethers.BrowserProvider(window.ethereum);
@@ -106,7 +142,7 @@ export async function openPosition(
   try {
     const tx = await contract.openPosition(marketIndex, directionIndex, leverage, {
       value,
-      gasLimit: leverage === 5 ? 800000 : 600000,
+      gasLimit: 800000,
     });
     const receipt = await tx.wait();
 
@@ -162,17 +198,12 @@ export async function refreshPositions(address: string): Promise<void> {
       ids.map(async (id) => {
         try {
           const p = await contract.getPosition(id);
-
-          // p is an ethers Result (tuple). Access fields by name.
           const isOpen = Boolean(p.open);
           if (!isOpen) return;
 
           const idStr = id.toString();
           const leverage = Number(p.leverage);
-          const storedLev: 2 | 5 =
-            leverage === 2 || leverage === 5
-              ? leverage
-              : (levMap[idStr] ?? 2);
+          const storedLev: number = leverage > 0 ? leverage : (levMap[idStr] ?? 2);
 
           const entryPrice = Number(p.entryPrice) / 1e18;
           const collateral = Number(ethers.formatEther(p.collateral));
@@ -201,8 +232,8 @@ export async function refreshPositions(address: string): Promise<void> {
       const unassigned = positions.filter((p) => !levMap[p.id]);
       pendingEntries.forEach(([pendingKey, lev], i) => {
         if (unassigned[i]) {
-          levMap[unassigned[i].id] = lev as 2 | 5;
-          unassigned[i].leverage = lev as 2 | 5;
+          levMap[unassigned[i].id] = lev as number;
+          unassigned[i].leverage = lev as number;
         }
         delete levMap[pendingKey];
       });
@@ -240,4 +271,4 @@ export function pnl(p: Position, currentPrice: number): number {
     ? currentPrice - p.entryPrice
     : p.entryPrice - currentPrice;
   return (diff / p.entryPrice) * p.collateral * p.leverage;
-                       }
+  }
