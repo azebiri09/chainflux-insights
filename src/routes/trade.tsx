@@ -62,11 +62,17 @@ function tierRequiredForLeverage(lv: number): number {
   return TIER_LEVERAGE.length - 1;
 }
 
+// Normalize openedAt to seconds regardless of whether it was stored in ms or s
+function toSeconds(openedAt: number): number {
+  return openedAt > 1e12 ? Math.floor(openedAt / 1000) : openedAt;
+}
+
 function useCFTCountdown(openedAt: number) {
   const [secondsLeft, setSecondsLeft] = useState(0);
   useEffect(() => {
     const update = () => {
-      const elapsed = Math.floor(Date.now() / 1000) - openedAt;
+      const nowSec = Math.floor(Date.now() / 1000);
+      const elapsed = nowSec - toSeconds(openedAt);
       setSecondsLeft(Math.max(0, CFT_MIN_HOLD - elapsed));
     };
     update();
@@ -86,6 +92,14 @@ function CFTCountdown({ openedAt }: { openedAt: number }) {
       CFT in {m}:{s.toString().padStart(2, "0")}
     </span>
   );
+}
+
+// Estimate CFT earned for a position (same formula as contract)
+function estimateCFT(collateralEth: number, leverage: number): number {
+  if (!collateralEth || collateralEth <= 0) return 0;
+  const fee = collateralEth * 0.003;
+  const collateral = collateralEth - fee;
+  return collateral * leverage * 1000;
 }
 
 function TradePage() {
@@ -121,9 +135,7 @@ function TradePage() {
 
   const cftPreview = useMemo(() => {
     if (!m.current || sizeNum <= 0) return 0;
-    const fee = sizeNum * 0.003;
-    const collateral = sizeNum - fee;
-    return collateral * leverage * 1000;
+    return estimateCFT(sizeNum, leverage);
   }, [sizeNum, leverage, m.current]);
 
   const liquidationPrice = useMemo(() => {
@@ -388,7 +400,7 @@ function TradePage() {
                 <div className="mt-3 flex items-center justify-between px-4 py-3.5 rounded-xl bg-white/5 border border-white/10">
                   <span className="text-xs tracking-[0.2em] text-white/50 uppercase">You receive</span>
                   <span className="text-white tabular-nums text-sm font-semibold">
-                    {cftPreview.toLocaleString(undefined, { maximumFractionDigits: 0 })} CFT
+                    ~{cftPreview.toLocaleString(undefined, { maximumFractionDigits: 0 })} CFT
                   </span>
                 </div>
               )}
@@ -486,6 +498,7 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
               p.direction === "LONG"
                 ? p.entryPrice * (1 - moveToLiq)
                 : p.entryPrice * (1 + moveToLiq);
+            const cftEstimate = estimateCFT(p.collateral, p.leverage);
             return (
               <tr key={p.id} className="border-t border-white/8 hover:bg-white/[0.02] transition-colors">
                 <td className="px-6 py-5 text-white font-medium">{MARKET_DISPLAY[p.market]}</td>
@@ -494,7 +507,7 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
                 </td>
                 <td className="px-6 py-5 text-white/70">{p.leverage}×</td>
                 <td className="px-6 py-5 text-right text-white tabular-nums">
-                  <div>{p.cftMinted.toLocaleString(undefined, { maximumFractionDigits: 0 })} CFT</div>
+                  <div>~{cftEstimate.toLocaleString(undefined, { maximumFractionDigits: 0 })} CFT</div>
                   <CFTCountdown openedAt={p.openedAt} />
                 </td>
                 <td className="px-6 py-5 text-right text-white/80 tabular-nums">{p.entryPrice.toFixed(4)}</td>
@@ -519,4 +532,5 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
       </table>
     </div>
   );
-                }
+      }
+ 
