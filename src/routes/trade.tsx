@@ -337,7 +337,7 @@ function TradePage() {
                       {locked ? (
   <>
     <Lock size={12} weight="bold" className="opacity-50" />
-    <span className="opacity-40 text-sm font-semibold">{lv}×</span>
+    <span className="opacity-41 text-sm font-semibold">{lv}×</span>
     <span
       className="text-[11px] tracking-wide leading-none mt-1 font-semibold"
       style={{ color: TIER_COLORS[tierNeeded] }}
