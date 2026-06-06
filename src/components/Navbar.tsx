@@ -126,4 +126,4 @@ export default function Navbar({ transparentOnTop = false }: { transparentOnTop?
       )}
     </header>
   );
-            }
+      }
