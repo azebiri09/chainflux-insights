@@ -5,7 +5,7 @@ import Layout from "@/components/Layout";
 import TradingChart from "@/components/TradingChart";
 import { MARKET_UNITS, useMarket } from "@/lib/markets";
 import type { Market } from "@/lib/positions";
-import { closePosition, openPosition, pnl, usePositions, ethToCft } from "@/lib/positions";
+import { closePosition, openPosition, pnl, usePositions, ethToCft, checkLiquidations } from "@/lib/positions";
 import { connectWallet, useWallet, shortAddr } from "@/lib/wallet";
 import { ethers } from "ethers";
 
@@ -115,9 +115,17 @@ function TradePage() {
   const [tierInfo, setTierInfo] = useState<TierInfo | null>(null);
 
   const wallet = useWallet();
-  const m = useMarket(market);
-  const { open } = usePositions(wallet);
+const m = useMarket(market);
+const { open } = usePositions(wallet);
+const gas = useMarket("GAS");
+const txs = useMarket("TXS_PER_BLOCK");
 
+useEffect(() => {
+  if (gas.current > 0 || txs.current > 0) {
+    checkLiquidations({ GAS: gas.current, TXS_PER_BLOCK: txs.current });
+  }
+}, [gas.current, txs.current]);
+  
   const sizeNum = Number(size) || 0;
 
   useEffect(() => {
