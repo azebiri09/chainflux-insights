@@ -10,9 +10,9 @@ export default function Layout({
   hideNav?: boolean;
 }) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       {!hideNav && <Navbar transparentOnTop={transparentNav} />}
-      <main className="fade-in">{children}</main>
+      <main className="fade-in flex-1">{children}</main>
       <footer className="border-t border-white/10 mt-24">
         <div className="mx-auto max-w-7xl px-6 py-10 text-sm text-white/50 flex flex-wrap items-center justify-between gap-2">
           <span className="text-white">ChainFlux</span>
