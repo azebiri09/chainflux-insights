@@ -3,10 +3,10 @@ import { useEffect, useState } from "react";
 import { useWallet, connectWallet, disconnectWallet, shortAddr } from "@/lib/wallet";
 
 const links = [
-  { to: "/trade", label: "Trade" },
-  { to: "/feed", label: "Network Feed" },
-  { to: "/leaderboard", label: "Leaderboard" },
-  { to: "/portfolio", label: "Portfolio" },
+  { to: "/trade", label: "Trade", color: "#4ade80", bg: "rgba(74,222,128,0.08)", border: "rgba(74,222,128,0.35)" },
+  { to: "/feed", label: "Network Feed", color: "#60a5fa", bg: "rgba(96,165,250,0.08)", border: "rgba(96,165,250,0.35)" },
+  { to: "/leaderboard", label: "Leaderboard", color: "#facc15", bg: "rgba(250,204,21,0.08)", border: "rgba(250,204,21,0.35)" },
+  { to: "/portfolio", label: "Portfolio", color: "#e879f9", bg: "rgba(232,121,249,0.08)", border: "rgba(232,121,249,0.35)" },
 ] as const;
 
 export default function Navbar({ transparentOnTop = false }: { transparentOnTop?: boolean }) {
@@ -37,19 +37,41 @@ export default function Navbar({ transparentOnTop = false }: { transparentOnTop?
         </Link>
 
         <nav className="hidden md:flex items-center gap-2">
-          {links.map((l) => (
-            <Link
-              key={l.to}
-              to={l.to}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                path === l.to
-                  ? "text-white bg-white/10 border border-white/15"
-                  : "text-white/60 hover:text-white hover:bg-white/5"
-              }`}
-            >
-              {l.label}
-            </Link>
-          ))}
+          {links.map((l) => {
+            const active = path === l.to;
+            return (
+              <Link
+                key={l.to}
+                to={l.to}
+                style={active ? {
+                  color: l.color,
+                  background: l.bg,
+                  borderColor: l.border,
+                } : {}}
+                className={`px-4 py-2 text-sm font-medium rounded-lg border transition-all ${
+                  active
+                    ? "border-opacity-100"
+                    : "border-transparent text-white/60 hover:text-white hover:bg-white/5"
+                }`}
+                onMouseEnter={(e) => {
+                  if (!active) {
+                    (e.currentTarget as HTMLElement).style.color = l.color;
+                    (e.currentTarget as HTMLElement).style.borderColor = l.border;
+                    (e.currentTarget as HTMLElement).style.background = l.bg;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) {
+                    (e.currentTarget as HTMLElement).style.color = "";
+                    (e.currentTarget as HTMLElement).style.borderColor = "";
+                    (e.currentTarget as HTMLElement).style.background = "";
+                  }
+                }}
+              >
+                {l.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="flex items-center gap-3">
@@ -83,18 +105,22 @@ export default function Navbar({ transparentOnTop = false }: { transparentOnTop?
       {open && (
         <div className="md:hidden border-t border-white/5 bg-black/90">
           <div className="px-6 py-4 flex flex-col gap-2">
-            {links.map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                onClick={() => setOpen(false)}
-                className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                  path === l.to ? "bg-white/10 text-white" : "text-white/70 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                {l.label}
-              </Link>
-            ))}
+            {links.map((l) => {
+              const active = path === l.to;
+              return (
+                <Link
+                  key={l.to}
+                  to={l.to}
+                  onClick={() => setOpen(false)}
+                  style={active ? { color: l.color, background: l.bg, borderColor: l.border } : {}}
+                  className={`px-4 py-3 rounded-lg text-sm font-medium border transition-all ${
+                    active ? "border-opacity-100" : "border-transparent text-white/70 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  {l.label}
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}
