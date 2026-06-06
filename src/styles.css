@@ -4,8 +4,6 @@
 
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
 
-@custom-variant dark (&:is(.dark *));
-
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -34,65 +32,39 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-/* ===== DARK MODE (default) ===== */
 :root {
   --radius: 0.75rem;
   --background: #000000;
-  --foreground: oklch(0.98 0.005 250);
-  --card: oklch(0.10 0.005 260);
-  --card-foreground: oklch(0.98 0.005 250);
-  --popover: oklch(0.10 0.005 260);
-  --popover-foreground: oklch(0.98 0.005 250);
+  --foreground: #ffffff;
+  --card: rgba(255,255,255,0.04);
+  --card-foreground: #ffffff;
+  --popover: rgba(255,255,255,0.04);
+  --popover-foreground: #ffffff;
   --primary: oklch(0.68 0.13 245);
-  --primary-foreground: oklch(0.98 0.005 250);
-  --secondary: oklch(0.14 0.005 260);
-  --secondary-foreground: oklch(0.98 0.005 250);
-  --muted: oklch(0.14 0.005 260);
-  --muted-foreground: oklch(0.72 0.02 255);
-  --accent: oklch(0.18 0.005 260);
-  --accent-foreground: oklch(0.98 0.005 250);
+  --primary-foreground: #ffffff;
+  --secondary: rgba(255,255,255,0.06);
+  --secondary-foreground: #ffffff;
+  --muted: rgba(255,255,255,0.06);
+  --muted-foreground: rgba(255,255,255,0.60);
+  --accent: rgba(255,255,255,0.08);
+  --accent-foreground: #ffffff;
   --destructive: oklch(0.60 0.20 25);
-  --destructive-foreground: oklch(0.98 0.005 250);
-  --border: oklch(1 0 0 / 18%);
-  --input: oklch(1 0 0 / 14%);
+  --destructive-foreground: #ffffff;
+  --border: rgba(255,255,255,0.18);
+  --input: rgba(255,255,255,0.14);
   --ring: oklch(0.55 0.10 245);
-  --panel: oklch(0.10 0.005 260);
-}
-
-/* ===== LIGHT MODE ===== */
-:root.light {
-  --background: #ffffff;
-  --foreground: oklch(0.10 0.005 260);
-  --card: oklch(0.97 0.005 250);
-  --card-foreground: oklch(0.10 0.005 260);
-  --popover: oklch(0.97 0.005 250);
-  --popover-foreground: oklch(0.10 0.005 260);
-  --primary: oklch(0.45 0.13 245);
-  --primary-foreground: oklch(0.98 0.005 250);
-  --secondary: oklch(0.93 0.005 260);
-  --secondary-foreground: oklch(0.10 0.005 260);
-  --muted: oklch(0.93 0.005 260);
-  --muted-foreground: oklch(0.45 0.02 255);
-  --accent: oklch(0.90 0.005 260);
-  --accent-foreground: oklch(0.10 0.005 260);
-  --destructive: oklch(0.55 0.20 25);
-  --destructive-foreground: oklch(0.98 0.005 250);
-  --border: oklch(0 0 0 / 10%);
-  --input: oklch(0 0 0 / 7%);
-  --ring: oklch(0.45 0.10 245);
-  --panel: oklch(0.96 0.005 260);
+  --panel: rgba(255,255,255,0.04);
 }
 
 @layer base {
   * { border-color: var(--color-border); }
 
   html, body {
-    background-color: var(--background);
-    color: var(--color-foreground);
+    background-color: #000000;
+    color: #ffffff;
     font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-feature-settings: "cv11", "ss01", "ss03";
     font-size: 15px;
-    transition: background-color 0.3s ease, color 0.3s ease;
   }
 
   body {
@@ -108,65 +80,17 @@
   }
 }
 
-/* ---------- Dark mode opacity boosts (unchanged) ---------- */
-:root:not(.light) .text-white\/40 { color: rgba(255,255,255,0.55) !important; }
-:root:not(.light) .text-white\/50 { color: rgba(255,255,255,0.60) !important; }
-:root:not(.light) .text-white\/60 { color: rgba(255,255,255,0.70) !important; }
-:root:not(.light) .border-white\/10 { border-color: rgba(255,255,255,0.18) !important; }
-:root:not(.light) .border-white\/8  { border-color: rgba(255,255,255,0.14) !important; }
-:root:not(.light) .border-white\/15 { border-color: rgba(255,255,255,0.22) !important; }
-:root:not(.light) .border-white\/12 { border-color: rgba(255,255,255,0.20) !important; }
+/* ---------- Visibility boosts ---------- */
+.text-white\/40 { color: rgba(255,255,255,0.55) !important; }
+.text-white\/50 { color: rgba(255,255,255,0.62) !important; }
+.text-white\/60 { color: rgba(255,255,255,0.72) !important; }
+.border-white\/10 { border-color: rgba(255,255,255,0.18) !important; }
+.border-white\/8  { border-color: rgba(255,255,255,0.14) !important; }
+.border-white\/15 { border-color: rgba(255,255,255,0.22) !important; }
+.border-white\/12 { border-color: rgba(255,255,255,0.20) !important; }
+.border-white\/5  { border-color: rgba(255,255,255,0.10) !important; }
 
-/* ---------- Light mode — ONLY plain page elements ---------- */
-/* These only apply to elements that are NOT inside a dark card */
-
-/* Page background text */
-:root.light .text-white {
-  color: #0a0a0a !important;
-}
-:root.light .text-white\/80 { color: rgba(0,0,0,0.80) !important; }
-:root.light .text-white\/70 { color: rgba(0,0,0,0.65) !important; }
-:root.light .text-white\/60 { color: rgba(0,0,0,0.55) !important; }
-:root.light .text-white\/50 { color: rgba(0,0,0,0.45) !important; }
-:root.light .text-white\/40 { color: rgba(0,0,0,0.38) !important; }
-:root.light .text-white\/30 { color: rgba(0,0,0,0.28) !important; }
-
-/* Borders */
-:root.light .border-white\/10 { border-color: rgba(0,0,0,0.10) !important; }
-:root.light .border-white\/8  { border-color: rgba(0,0,0,0.08) !important; }
-:root.light .border-white\/15 { border-color: rgba(0,0,0,0.14) !important; }
-:root.light .border-white\/12 { border-color: rgba(0,0,0,0.11) !important; }
-:root.light .border-white\/5  { border-color: rgba(0,0,0,0.06) !important; }
-:root.light .border-white\/20 { border-color: rgba(0,0,0,0.16) !important; }
-
-/* Backgrounds */
-:root.light .bg-white\/5  { background-color: rgba(0,0,0,0.04) !important; }
-:root.light .bg-white\/10 { background-color: rgba(0,0,0,0.07) !important; }
-
-/* Navbar */
-:root.light .bg-black\/80 { background-color: rgba(255,255,255,0.88) !important; }
-:root.light .bg-black\/90 { background-color: rgba(255,255,255,0.94) !important; }
-
-/* Glass card in light mode — white card on white page */
-:root.light .glass {
-  background: rgba(0,0,0,0.03) !important;
-  border-color: rgba(0,0,0,0.10) !important;
-  box-shadow:
-    0 1px 3px rgba(0,0,0,0.06),
-    0 8px 24px rgba(0,0,0,0.05) !important;
-}
-
-/* ===== DARK ZONES — never affected by light mode ===== */
-/* Feed page fixed background, hero section over image,
-   and any element with an explicit dark background stays untouched.
-   We do this by NOT overriding inline styles (which the feed uses)
-   and by protecting the hero which sits over a background image. */
-
-/* Hero text must always be white — it sits on a dark image */
-.hero-text { color: #ffffff !important; }
-.hero-subtext { color: rgba(255,255,255,0.55) !important; }
-
-/* ---------- Glass card (dark default) ---------- */
+/* ---------- Glass card ---------- */
 .glass {
   background: rgba(255,255,255,0.04);
   backdrop-filter: blur(20px) saturate(120%);
@@ -176,14 +100,13 @@
     inset 0 1px 0 0 rgba(255,255,255,0.10),
     0 20px 60px -20px rgba(0,0,0,0.8);
   position: relative;
-  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .glass-strong {
   background: rgba(255,255,255,0.06);
   backdrop-filter: blur(28px) saturate(130%);
   -webkit-backdrop-filter: blur(28px) saturate(130%);
-  border: 1px solid rgba(255,255,255,0.20);
+  border: 1px solid rgba(255,255,255,0.22);
   box-shadow:
     inset 0 1px 0 0 rgba(255,255,255,0.12),
     0 30px 80px -24px rgba(0,0,0,0.9);
