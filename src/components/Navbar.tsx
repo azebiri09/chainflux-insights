@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useWallet, connectWallet, disconnectWallet, shortAddr } from "@/lib/wallet";
+import { Sun, Moon } from "@phosphor-icons/react";
 
 const links = [
   { to: "/trade", label: "Trade", color: "#4ade80", bg: "rgba(74,222,128,0.08)", border: "rgba(74,222,128,0.35)" },
@@ -9,7 +10,15 @@ const links = [
   { to: "/portfolio", label: "Portfolio", color: "#e879f9", bg: "rgba(232,121,249,0.08)", border: "rgba(232,121,249,0.35)" },
 ] as const;
 
-export default function Navbar({ transparentOnTop = false }: { transparentOnTop?: boolean }) {
+export default function Navbar({
+  transparentOnTop = false,
+  theme = "dark",
+  onToggleTheme,
+}: {
+  transparentOnTop?: boolean;
+  theme?: "dark" | "light";
+  onToggleTheme?: () => void;
+}) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const wallet = useWallet();
@@ -23,17 +32,22 @@ export default function Navbar({ transparentOnTop = false }: { transparentOnTop?
   }, []);
 
   const solid = !transparentOnTop || scrolled;
+  const isLight = theme === "light";
 
   return (
     <header
       className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
-        solid ? "backdrop-blur-xl bg-black/80 border-b border-white/10" : "bg-transparent"
+        solid
+          ? isLight
+            ? "backdrop-blur-xl bg-white/85 border-b border-black/10"
+            : "backdrop-blur-xl bg-black/80 border-b border-white/10"
+          : "bg-transparent"
       }`}
     >
       <div className="mx-auto max-w-7xl px-6 sm:px-10 h-20 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
-          <span className="h-8 w-8 rounded-lg bg-white/10 border border-white/20" />
-          <span className="text-lg font-bold tracking-tight text-white">ChainFlux</span>
+          <span className={`h-8 w-8 rounded-lg border ${isLight ? "bg-black/10 border-black/20" : "bg-white/10 border-white/20"}`} />
+          <span className={`text-lg font-bold tracking-tight ${isLight ? "text-black" : "text-white"}`}>ChainFlux</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-2">
@@ -51,6 +65,8 @@ export default function Navbar({ transparentOnTop = false }: { transparentOnTop?
                 className={`px-4 py-2 text-sm font-medium rounded-lg border transition-all ${
                   active
                     ? "border-opacity-100"
+                    : isLight
+                    ? "border-transparent text-black/50 hover:text-black hover:bg-black/5"
                     : "border-transparent text-white/60 hover:text-white hover:bg-white/5"
                 }`}
                 onMouseEnter={(e) => {
@@ -75,23 +91,45 @@ export default function Navbar({ transparentOnTop = false }: { transparentOnTop?
         </nav>
 
         <div className="flex items-center gap-3">
+          {/* Theme toggle */}
+          <button
+            onClick={onToggleTheme}
+            className={`p-2 rounded-lg border transition-all ${
+              isLight
+                ? "bg-black/5 border-black/10 text-black/60 hover:text-black hover:bg-black/10"
+                : "bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10"
+            }`}
+            aria-label="Toggle theme"
+          >
+            {isLight ? <Moon size={16} weight="bold" /> : <Sun size={16} weight="bold" />}
+          </button>
+
           {wallet ? (
             <button
               onClick={disconnectWallet}
-              className="hidden sm:inline-flex px-4 py-2 text-sm font-medium rounded-lg bg-white/5 hover:bg-white/10 text-white border border-white/10 transition-colors"
+              className={`hidden sm:inline-flex px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                isLight
+                  ? "bg-black/5 hover:bg-black/10 text-black border-black/10"
+                  : "bg-white/5 hover:bg-white/10 text-white border-white/10"
+              }`}
             >
               {shortAddr(wallet)}
             </button>
           ) : (
             <button
               onClick={() => connectWallet()}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-white text-black hover:bg-white/90 transition-colors"
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                isLight
+                  ? "bg-black text-white hover:bg-black/80"
+                  : "bg-white text-black hover:bg-white/90"
+              }`}
             >
               Connect Wallet
             </button>
           )}
+
           <button
-            className="md:hidden p-2 text-white/80"
+            className={`md:hidden p-2 ${isLight ? "text-black/80" : "text-white/80"}`}
             onClick={() => setOpen((v) => !v)}
             aria-label="Menu"
           >
@@ -103,7 +141,7 @@ export default function Navbar({ transparentOnTop = false }: { transparentOnTop?
       </div>
 
       {open && (
-        <div className="md:hidden border-t border-white/5 bg-black/90">
+        <div className={`md:hidden border-t ${isLight ? "border-black/5 bg-white/92" : "border-white/5 bg-black/90"}`}>
           <div className="px-6 py-4 flex flex-col gap-2">
             {links.map((l) => {
               const active = path === l.to;
@@ -114,7 +152,11 @@ export default function Navbar({ transparentOnTop = false }: { transparentOnTop?
                   onClick={() => setOpen(false)}
                   style={active ? { color: l.color, background: l.bg, borderColor: l.border } : {}}
                   className={`px-4 py-3 rounded-lg text-sm font-medium border transition-all ${
-                    active ? "border-opacity-100" : "border-transparent text-white/70 hover:text-white hover:bg-white/5"
+                    active
+                      ? "border-opacity-100"
+                      : isLight
+                      ? "border-transparent text-black/60 hover:text-black hover:bg-black/5"
+                      : "border-transparent text-white/70 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   {l.label}
@@ -126,4 +168,4 @@ export default function Navbar({ transparentOnTop = false }: { transparentOnTop?
       )}
     </header>
   );
-     }
+    }
