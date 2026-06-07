@@ -12,6 +12,8 @@ import { ethers } from "ethers";
 export const Route = createFileRoute("/trade")({
   component: TradePage,
   head: () => ({ meta: [{ title: "Trade ChainFlux" }] }),
+});
+
 const MARKETS: Market[] = ["GAS", "TXS_PER_BLOCK"];
 const TIMEFRAMES = ["30s", "1m", "5m"] as const;
 type Timeframe = typeof TIMEFRAMES[number];
@@ -309,7 +311,7 @@ function TradePage() {
                 )}
               </div>
 
-              <TradingChart market={market} chartType={chartType} timeframe={timeframe} />
+              <TradingChart data={m.history} type={chartType} timeframe={timeframe} />
             </div>
           </div>
 
