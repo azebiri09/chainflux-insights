@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Lock } from "@phosphor-icons/react";
 import Layout from "@/components/Layout";
 import TradingChart from "@/components/TradingChart";
-import { MARKET_UNITS, useMarket } from "@/lib/markets";
+import { MARKET_UNITS, useMarket, useNetworkFeed, getMetricState } from "@/lib/markets";
 import type { Market } from "@/lib/positions";
 import { closePosition, openPosition, pnl, usePositions, ethToCft, checkLiquidations } from "@/lib/positions";
 import { connectWallet, useWallet, shortAddr } from "@/lib/wallet";
@@ -62,7 +62,6 @@ function tierRequiredForLeverage(lv: number): number {
   return TIER_LEVERAGE.length - 1;
 }
 
-// Normalize openedAt to seconds regardless of whether it was stored in ms or s
 function toSeconds(openedAt: number): number {
   return openedAt > 1e12 ? Math.floor(openedAt / 1000) : openedAt;
 }
@@ -94,12 +93,63 @@ function CFTCountdown({ openedAt }: { openedAt: number }) {
   );
 }
 
-// Estimate CFT earned for a position (same formula as contract)
 function estimateCFT(collateralEth: number, leverage: number): number {
   if (!collateralEth || collateralEth <= 0) return 0;
   const fee = collateralEth * 0.003;
   const collateral = collateralEth - fee;
   return collateral * leverage * 1000;
+}
+
+function computeAttentionScore(
+  gas: number, gasHigh: number, gasLow: number,
+  txs: number, txsHigh: number, txsLow: number,
+  addr: number, addrHigh: number, addrLow: number
+): number {
+  const norm = (v: number, lo: number, hi: number) => {
+    const range = hi - lo;
+    if (range <= 0) return 50;
+    return Math.min(100, Math.max(0, ((v - lo) / range) * 100));
+  };
+  const gasScore = norm(gas, gasLow, gasHigh);
+  const txsScore = norm(txs, txsLow, txsHigh);
+  const addrScore = norm(addr, addrLow, addrHigh);
+  return Math.round(gasScore * 0.4 + txsScore * 0.4 + addrScore * 0.2);
+}
+
+function AttentionPrompt({ score }: { score: number }) {
+  if (score < 70) return null;
+
+  let text: string;
+  let color: string;
+  let borderColor: string;
+
+  if (score >= 86) {
+    text = "Ethereum activity is approaching recent highs. Market attention is concentrated on network demand.";
+    color = "rgba(239,68,68,0.85)";
+    borderColor = "rgba(239,68,68,0.20)";
+  } else {
+    text = "Network demand is accelerating. Activity is rising across Ethereum and traders are positioning for increased usage.";
+    color = "rgba(249,115,22,0.85)";
+    borderColor = "rgba(249,115,22,0.20)";
+  }
+
+  return (
+    <div
+      className="mb-6 px-5 py-3.5 rounded-xl flex items-center gap-3"
+      style={{
+        background: "rgba(255,255,255,0.03)",
+        border: `1px solid ${borderColor}`,
+      }}
+    >
+      <div
+        className="w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ background: color, boxShadow: `0 0 6px ${color}` }}
+      />
+      <p className="text-sm leading-relaxed" style={{ color }}>
+        {text}
+      </p>
+    </div>
+  );
 }
 
 function TradePage() {
@@ -115,17 +165,24 @@ function TradePage() {
   const [tierInfo, setTierInfo] = useState<TierInfo | null>(null);
 
   const wallet = useWallet();
-const m = useMarket(market);
-const { open } = usePositions(wallet);
-const gas = useMarket("GAS");
-const txs = useMarket("TXS_PER_BLOCK");
+  const m = useMarket(market);
+  const { open } = usePositions(wallet);
+  const gas = useMarket("GAS");
+  const txs = useMarket("TXS_PER_BLOCK");
+  const feed = useNetworkFeed();
 
-useEffect(() => {
-  if (gas.current > 0 || txs.current > 0) {
-    checkLiquidations({ GAS: gas.current, TXS_PER_BLOCK: txs.current });
-  }
-}, [gas.current, txs.current]);
-  
+  useEffect(() => {
+    if (gas.current > 0 || txs.current > 0) {
+      checkLiquidations({ GAS: gas.current, TXS_PER_BLOCK: txs.current });
+    }
+  }, [gas.current, txs.current]);
+
+  const attentionScore = computeAttentionScore(
+    gas.current, feed.GAS_DAILY_HIGH ?? 0, feed.GAS_DAILY_LOW ?? 0,
+    txs.current, feed.TXS_DAILY_HIGH ?? 0, feed.TXS_DAILY_LOW ?? 0,
+    feed.ACTIVE_ADDRESSES ?? 0, feed.ACTIVE_DAILY_HIGH ?? 0, feed.ACTIVE_DAILY_LOW ?? 0,
+  );
+
   const sizeNum = Number(size) || 0;
 
   useEffect(() => {
@@ -199,140 +256,116 @@ useEffect(() => {
           </div>
         )}
 
-        {error && (
-          <div className="mb-6 glass rounded-2xl p-4 border border-red-500/40 text-red-300 text-sm">
-            {error}
-          </div>
-        )}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6">
 
-        {txHash && (
-          <div className="mb-6 glass rounded-2xl p-4 border border-emerald-500/40 text-emerald-300 text-sm">
-            {txHash}
-          </div>
-        )}
-
-        <div className="grid gap-6 lg:grid-cols-3">
-
-          {/* Chart panel */}
-          <div className="lg:col-span-2 glass rounded-2xl p-6 sm:p-8">
-
-            <div className="flex flex-wrap items-center gap-2 mb-7">
-              {MARKETS.map((mm) => (
-                <button
-                  key={mm}
-                  onClick={() => setMarket(mm)}
-                  className={`px-4 py-2 rounded-full text-xs tracking-[0.2em] uppercase border transition-colors ${
-                    market === mm
-                      ? "bg-white/10 border-white/30 text-white"
-                      : "border-white/10 text-white/50 hover:text-white hover:border-white/20"
-                  }`}
-                >
-                  {MARKET_DISPLAY[mm]}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-baseline gap-4 flex-wrap">
-              <div className="text-5xl sm:text-6xl text-white tabular-nums font-semibold tracking-tight">
-                {m.current.toFixed(4)}
-              </div>
-              <div className="text-sm text-white/40 tracking-widest uppercase">
-                {MARKET_UNITS[market]}
-              </div>
-              <div
-                className={`text-sm tabular-nums px-3 py-1 rounded-full border ${
-                  tfChange >= 0
-                    ? "text-emerald-300 border-emerald-500/30 bg-emerald-500/5"
-                    : "text-red-300 border-red-500/30 bg-red-500/5"
-                }`}
-              >
-                {tfChange >= 0 ? "+" : ""}{tfChange.toFixed(2)}% {timeframe}
-              </div>
-            </div>
-
-            <div className="mt-7 pt-6 border-t border-white/10 flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-1">
-                {TIMEFRAMES.map((tf) => (
-                  <button
-                    key={tf}
-                    onClick={() => setTimeframe(tf)}
-                    className={`px-3 py-1.5 rounded text-xs tracking-wider uppercase transition-colors ${
-                      timeframe === tf ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
-                    }`}
-                  >
-                    {tf}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
-                <button
-                  onClick={() => setChartType("line")}
-                  className={`px-3 py-1.5 rounded text-xs transition-colors ${
-                    chartType === "line" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
-                  }`}
-                >
-                  Line
-                </button>
-                <button
-                  onClick={() => setChartType("candle")}
-                  className={`px-3 py-1.5 rounded text-xs transition-colors ${
-                    chartType === "candle" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
-                  }`}
-                >
-                  Candle
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-xl overflow-hidden" style={{ touchAction: "none" }}>
-              <TradingChart
-                data={m.history}
-                timeframe={timeframe}
-                type={chartType}
-                height={560}
-                entryPrice={open.find(p => p.market === market)?.entryPrice}
-                liquidationPrice={
-                  open.find(p => p.market === market)
-                    ? (() => {
-                        const pos = open.find(p => p.market === market)!;
-                        const moveToLiq = 0.8 / pos.leverage;
-                        return pos.direction === "LONG"
-                          ? pos.entryPrice * (1 - moveToLiq)
-                          : pos.entryPrice * (1 + moveToLiq);
-                      })()
-                    : liquidationPrice ?? undefined
-                }
-                direction={open.find(p => p.market === market)?.direction ?? dir}
-              />
-            </div>
-          </div>
-
-          {/* Position builder */}
-          <div className="glass rounded-2xl p-6 sm:p-8">
-
-            <div className="flex items-center justify-between mb-7 pb-5 border-b border-white/10">
-              <div className="text-xs tracking-[0.25em] text-white/60 uppercase font-medium">Open Position</div>
-              {tierInfo && (
-                <div
-                  className="text-[11px] tracking-[0.2em] uppercase font-semibold px-3 py-1 rounded-full border"
-                  style={{
-                    color: TIER_COLORS[tierInfo.tier],
-                    borderColor: TIER_COLORS[tierInfo.tier] + "50",
-                    background: TIER_COLORS[tierInfo.tier] + "12",
-                  }}
-                >
-                  {TIER_NAMES[tierInfo.tier]}
+          <div className="flex flex-col gap-6">
+            <div className="glass rounded-2xl overflow-hidden">
+              <div className="px-6 py-5 border-b border-white/10 flex flex-wrap items-center gap-4">
+                <div className="flex gap-2">
+                  {MARKETS.map((mk) => (
+                    <button
+                      key={mk}
+                      onClick={() => setMarket(mk)}
+                      className={`px-4 py-2 rounded-full text-xs font-semibold tracking-widest transition-all border ${
+                        market === mk
+                          ? "bg-white/10 border-white/30 text-white"
+                          : "border-white/10 text-white/40 hover:text-white/70 hover:border-white/20"
+                      }`}
+                    >
+                      {MARKET_DISPLAY[mk]}
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
+                <div className="flex gap-1.5 ml-auto">
+                  {TIMEFRAMES.map((tf) => (
+                    <button
+                      key={tf}
+                      onClick={() => setTimeframe(tf)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                        timeframe === tf
+                          ? "bg-white/10 border-white/25 text-white"
+                          : "border-white/8 text-white/35 hover:text-white/60"
+                      }`}
+                    >
+                      {tf}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setChartType(chartType === "line" ? "candle" : "line")}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium border border-white/8 text-white/35 hover:text-white/60 transition-all ml-1"
+                  >
+                    {chartType === "line" ? "Candle" : "Line"}
+                  </button>
+                </div>
+              </div>
 
-            <div className="grid grid-cols-2 gap-3">
+              <div className="px-6 py-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-white/6">
+                <span className="text-3xl font-bold text-white tabular-nums tracking-tight">
+                  {m.current > 0 ? m.current.toFixed(4) : "—"}
+                </span>
+                <span className="text-xs text-white/40 uppercase tracking-widest">{MARKET_UNITS[market]}</span>
+                {m.history.length > 1 && (
+                  <span className={`text-sm font-medium tabular-nums ${tfChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {tfChange >= 0 ? "+" : ""}{tfChange.toFixed(2)}%
+                  </span>
+                )}
+              </div>
+
+              <TradingChart market={market} chartType={chartType} timeframe={timeframe} />
+            </div>
+          </div>
+
+          <div
+            className="rounded-2xl p-6"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "2px solid rgba(255,255,255,0.18)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+            }}
+          >
+            <div className="text-xs tracking-[0.3em] uppercase text-white/40 font-semibold mb-2">Trade</div>
+            <h2 className="text-xl font-bold text-white tracking-tight mb-6">
+              {MARKET_DISPLAY[market]}
+            </h2>
+
+            <AttentionPrompt score={attentionScore} />
+
+            {tierInfo && (
+              <div className="mb-6 flex items-center justify-between px-4 py-3 rounded-xl bg-white/4 border border-white/10">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-xs font-bold tracking-wide"
+                    style={{ color: TIER_COLORS[tierInfo.tier] }}
+                  >
+                    {TIER_NAMES[tierInfo.tier]}
+                  </span>
+                  <span className="text-white/25 text-xs">|</span>
+                  <span className="text-white/50 text-xs tabular-nums">
+                    {tierInfo.cftBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })} CFT
+                  </span>
+                </div>
+                <span className="text-white/30 text-xs">Max {tierInfo.maxLeverage}×</span>
+              </div>
+            )}
+
+            {(error || txHash) && (
+              <div className={`mb-5 px-4 py-3 rounded-xl text-xs border ${
+                error
+                  ? "bg-red-500/8 border-red-500/20 text-red-300"
+                  : "bg-emerald-500/8 border-emerald-500/20 text-emerald-300"
+              }`}>
+                {error || txHash}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setDir("LONG")}
-                className={`relative overflow-hidden py-5 rounded-xl text-base font-semibold tracking-wide transition-all border ${
+                className={`py-4 rounded-xl text-sm font-bold tracking-wider transition-all border flex flex-col items-center gap-0.5 ${
                   dir === "LONG"
-                    ? "bg-emerald-500/20 border-emerald-400/60 text-emerald-200 shadow-[inset_0_1px_0_oklch(1_0_0/0.15),0_10px_30px_-10px_oklch(0.75_0.18_155/0.4)]"
-                    : "border-white/10 text-white/50 hover:text-white hover:border-white/25"
+                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
+                    : "border-white/10 text-white/30 hover:text-white/60 hover:border-white/20"
                 }`}
               >
                 <span className="block text-[10px] tracking-[0.3em] opacity-60 mb-1">BUY</span>
@@ -340,10 +373,10 @@ useEffect(() => {
               </button>
               <button
                 onClick={() => setDir("SHORT")}
-                className={`relative overflow-hidden py-5 rounded-xl text-base font-semibold tracking-wide transition-all border ${
+                className={`py-4 rounded-xl text-sm font-bold tracking-wider transition-all border flex flex-col items-center gap-0.5 ${
                   dir === "SHORT"
-                    ? "bg-red-500/20 border-red-400/60 text-red-200 shadow-[inset_0_1px_0_oklch(1_0_0/0.15),0_10px_30px_-10px_oklch(0.70_0.20_25/0.4)]"
-                    : "border-white/10 text-white/50 hover:text-white hover:border-white/25"
+                    ? "bg-red-500/15 border-red-500/40 text-red-300"
+                    : "border-white/10 text-white/30 hover:text-white/60 hover:border-white/20"
                 }`}
               >
                 <span className="block text-[10px] tracking-[0.3em] opacity-60 mb-1">SELL</span>
@@ -521,7 +554,7 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
                 <td className="px-6 py-5 text-right text-white/80 tabular-nums">{p.entryPrice.toFixed(4)}</td>
                 <td className="px-6 py-5 text-right text-red-300 tabular-nums">{liqPrice.toFixed(4)}</td>
                 <td className="px-6 py-5 text-right text-white tabular-nums">{cur.toFixed(4)}</td>
-                <td className={`px-6 py-5 text-right tabular-nums font-medium ${v >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                <td className={`px-6 py-5 text-right tabular-nums font-medium ${v >= 0 ? "text-emerald-300" : "text-red-400"}`}>
                   {v.toFixed(4)} ETH
                 </td>
                 <td className="px-6 py-5 text-right">
@@ -540,5 +573,5 @@ function PositionsTable({ open }: { open: ReturnType<typeof usePositions>["open"
       </table>
     </div>
   );
-      }
- 
+              }
+     
