@@ -49,9 +49,9 @@ function Index() {
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,1) 100%)" }} />
         <div className="relative w-full px-5 sm:px-10 pt-32 pb-24 text-center rise">
           <h1 className="headline hero-text mt-8 text-5xl sm:text-7xl md:text-[5.5rem] font-semibold tracking-tight leading-[1.08]">
-            Observe it. Understand it.
+            Markets Powered By
             <br />
-            <span className="hero-span">Trade it.</span>
+            <span className="hero-span">Blockchain Activities.</span>
           </h1>
           <p className="hero-subtext mt-8 text-base sm:text-lg max-w-xl mx-auto leading-relaxed">
             Blockchain data is everywhere, but it's hard to understand what actually matters. ChainFlux turns raw onchain activity into a live Attention Market, showing where demand, capital, and network activity are moving in real time.
@@ -72,7 +72,7 @@ function Index() {
       <section className="w-full px-5 sm:px-10 py-24 max-w-4xl mx-auto">
         <div className="text-base tracking-[0.2em] text-white/60 uppercase mb-5 font-semibold">Markets</div>
         <h2 className="headline text-4xl sm:text-5xl font-semibold text-white leading-[1.12] mb-12">
-          Markets powered by blockchain activity.
+          Live Markets
         </h2>
         <div className="flex flex-col gap-6">
 
@@ -97,7 +97,7 @@ function Index() {
       <section className="w-full px-5 sm:px-10 py-24 max-w-4xl mx-auto">
         <div className="text-base tracking-[0.2em] text-white/60 uppercase mb-5 font-semibold">Why ChainFlux exists</div>
         <h2 className="headline text-4xl sm:text-5xl font-semibold text-white leading-[1.12] mb-8">
-          Most platforms show you blockchain data. ChainFlux helps you understand what it means.
+          THE GOAL
         </h2>
         <div className="space-y-5 text-white/60 text-base sm:text-lg leading-relaxed">
           <p>Most blockchain data today is scattered across explorers, dashboards, and analytics tools. You can see what is happening, but you still need experience to understand what it means. That creates a gap between data and action.</p>
