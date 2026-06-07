@@ -3,9 +3,9 @@ import { useState, useMemo, useEffect } from "react";
 import { Lock } from "@phosphor-icons/react";
 import Layout from "@/components/Layout";
 import TradingChart from "@/components/TradingChart";
-import { MARKET_UNITS, useMarket, useNetworkFeed, getMetricState } from "@/lib/markets";
+import { MARKET_UNITS, useMarket, useNetworkFeed } from "@/lib/markets";
 import type { Market } from "@/lib/positions";
-import { closePosition, openPosition, pnl, usePositions, ethToCft, checkLiquidations } from "@/lib/positions";
+import { closePosition, openPosition, pnl, usePositions, checkLiquidations } from "@/lib/positions";
 import { connectWallet, useWallet, shortAddr } from "@/lib/wallet";
 import { ethers } from "ethers";
 
