@@ -8,8 +8,8 @@ export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "ChainFlux — Trade the heartbeat of blockchain" },
-      { name: "description", content: "Trade gas fees and transaction throughput on Arbitrum in real time." },
+      { title: "ChainFlux — Where blockchain activity becomes a market." },
+      { name: "description", content: "Blockchain data has always been observable but never tradeable. ChainFlux is the first market for it." },
     ],
   }),
 });
@@ -36,7 +36,7 @@ function Index() {
         .hero-span { color: rgba(255,255,255,0.60) !important; }
       `}</style>
 
-      {/* Hero — always dark, sits over a background image */}
+      {/* Hero */}
       <section className="relative min-h-[100svh] flex items-center overflow-hidden">
         <div
           className="absolute inset-0"
@@ -49,19 +49,19 @@ function Index() {
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,1) 100%)" }} />
         <div className="relative w-full px-5 sm:px-10 pt-32 pb-24 text-center rise">
           <h1 className="headline hero-text mt-8 text-5xl sm:text-7xl md:text-[5.5rem] font-semibold tracking-tight leading-[1.08]">
-            Markets powered by
+            Observe it. Understand it.
             <br />
-            <span className="hero-span">onchain activity</span>
+            <span className="hero-span">Trade it.</span>
           </h1>
           <p className="hero-subtext mt-8 text-base sm:text-lg max-w-xl mx-auto leading-relaxed">
-            Trade gas fees and transaction throughput on Arbitrum in real time. The network is the market.
+            Blockchain data is everywhere, but it's hard to understand what actually matters. ChainFlux turns raw onchain activity into a live Attention Market, showing where demand, capital, and network activity are moving in real time.
           </p>
           <div className="mt-12">
             <button
-              onClick={() => navigate({ to: "/trade" })}
+              onClick={() => navigate({ to: "/feed" })}
               className="inline-flex items-center justify-center px-8 py-4 rounded-full bg-white text-black font-semibold hover:bg-white/90 transition-colors text-sm tracking-wide"
             >
-              Start Trading
+              Enter ChainFlux
               <svg className="ml-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
             </button>
           </div>
@@ -72,13 +72,13 @@ function Index() {
       <section className="w-full px-5 sm:px-10 py-24 max-w-4xl mx-auto">
         <div className="text-base tracking-[0.2em] text-white/60 uppercase mb-5 font-semibold">What is ChainFlux</div>
         <h2 className="headline text-4xl sm:text-5xl font-semibold text-white leading-[1.12] mb-8">
-          A perpetual trading platform for Ethereum network activity.
+          Blockchain data has always been observable. Now it is tradeable.
         </h2>
         <div className="space-y-5 text-white/60 text-base sm:text-lg leading-relaxed">
-          <p>Most trading platforms let you speculate on the price of assets like ETH, BTC, or other tokens. ChainFlux is different.</p>
-          <p>Instead of trading token prices, you trade the metrics that describe what is happening on the Ethereum network itself.</p>
-          <p>Metrics like Gas Price and Transactions Per Block update continuously from live blockchain data and can be traded long or short using leverage.</p>
-          <p className="text-white/80 font-medium">ChainFlux turns blockchain activity into a market.</p>
+          <p>Blockchain data is fragmented across explorers, dashboards, and analytics platforms. Users can see the data but understanding what it means requires expertise.</p>
+          <p>ChainFlux converts raw onchain activity into an Attention Market that helps you instantly understand what is happening across Ethereum.</p>
+          <p>For fast moving signals like Gas Price and Transactions Per Block, users can take leveraged positions through perpetual markets.</p>
+          <p className="text-white/80 font-medium">Two layers. One platform. Understand what is happening and act on it.</p>
         </div>
       </section>
 
@@ -91,19 +91,29 @@ function Index() {
             <div className="text-xs tracking-[0.3em] text-white/40 uppercase mb-3">Gas</div>
             <h3 className="headline text-2xl sm:text-3xl font-semibold text-white mb-5">Gas Price</h3>
             <div className="space-y-3 text-white/60 text-base leading-relaxed">
-              <p>Gas Price measures how much users are willing to pay to have their transactions included on Ethereum.</p>
-              <p>When network demand increases, gas prices tend to rise. When activity slows, gas prices tend to fall.</p>
-              <p>ChainFlux allows traders to take positions on whether gas prices will move higher or lower.</p>
+              <p><span className="text-white/80 font-medium">What Is Happening</span></p>
+              <p>Users are competing for block space, pushing transaction costs higher.</p>
+              <p><span className="text-white/80 font-medium">Why Is This Happening</span></p>
+              <p>Increased onchain activity creates more demand for limited block space.</p>
+              <p><span className="text-white/80 font-medium">What Does It Mean</span></p>
+              <p>Rising gas often reflects heightened network demand, trading activity, or major protocol usage.</p>
+              <p><span className="text-white/80 font-medium">Possible Reactions</span></p>
+              <p>Watch for volatility. Spikes in gas often appear during periods of high market attention.</p>
             </div>
           </div>
 
           <div className="glass rounded-2xl p-8">
-            <div className="text-xs tracking-[0.3em] text-white/40 uppercase mb-3">TXS_PER_BLOCK</div>
+            <div className="text-xs tracking-[0.3em] text-white/40 uppercase mb-3">TXS PER BLOCK</div>
             <h3 className="headline text-2xl sm:text-3xl font-semibold text-white mb-5">Transactions Per Block</h3>
             <div className="space-y-3 text-white/60 text-base leading-relaxed">
-              <p>Transactions Per Block measures how many transactions are included in each Ethereum block.</p>
-              <p>Higher values generally indicate increased network activity, while lower values suggest reduced activity.</p>
-              <p>ChainFlux allows traders to speculate on changes in transaction volume as activity across the network evolves.</p>
+              <p><span className="text-white/80 font-medium">What Is Happening</span></p>
+              <p>More transactions are being included in each Ethereum block.</p>
+              <p><span className="text-white/80 font-medium">Why Is This Happening</span></p>
+              <p>Increased usage from users, applications, and protocols is driving higher throughput.</p>
+              <p><span className="text-white/80 font-medium">What Does It Mean</span></p>
+              <p>Rising transaction counts usually indicate stronger network engagement and activity.</p>
+              <p><span className="text-white/80 font-medium">Possible Reactions</span></p>
+              <p>Sustained increases may signal growing ecosystem demand.</p>
             </div>
           </div>
 
@@ -114,12 +124,12 @@ function Index() {
       <section className="w-full px-5 sm:px-10 py-24 max-w-4xl mx-auto">
         <div className="text-base tracking-[0.2em] text-white/60 uppercase mb-5 font-semibold">Why it exists</div>
         <h2 className="headline text-4xl sm:text-5xl font-semibold text-white leading-[1.12] mb-8">
-          Price is the last thing to move.
+          Most platforms show you blockchain data. ChainFlux helps you understand what it means.
         </h2>
         <div className="space-y-5 text-white/60 text-base sm:text-lg leading-relaxed">
-          <p>Blockchains generate massive amounts of real time data, but most of that data cannot be traded directly.</p>
-          <p>Traders often monitor metrics such as gas usage and transaction activity to better understand what is happening across the network.</p>
-          <p>ChainFlux transforms these metrics into tradeable markets, allowing users to express views on network activity itself rather than only on token prices.</p>
+          <p>Blockchain networks generate massive real time activity, but that activity is scattered across dashboards and difficult to interpret.</p>
+          <p>Most users can see data, but very few can understand what it actually means in context.</p>
+          <p>ChainFlux solves this by transforming raw onchain activity into a live Attention Market, surfacing clear signals about demand, capital flows, and network momentum.</p>
         </div>
       </section>
 
@@ -131,23 +141,23 @@ function Index() {
           {[
             {
               step: "Step 1",
-              title: "Choose a market.",
-              body: "Select Gas Price or Transactions Per Block. Both markets are powered by live Ethereum network data.",
+              title: "Enter the Attention Layer.",
+              body: "Enter the Attention Layer and see what is happening across Ethereum in real time.",
             },
             {
               step: "Step 2",
-              title: "Open a position.",
-              body: "Go long if you expect the metric to increase. Go short if you expect it to decrease. Choose your collateral and leverage.",
+              title: "Understand the signals.",
+              body: "Understand the signals through interpreted metrics, trends, and Attention Score.",
             },
             {
               step: "Step 3",
-              title: "Monitor the market.",
-              body: "Your position moves as the underlying network metric changes in real time.",
+              title: "Open a position.",
+              body: "Open a position when a signal becomes strong enough to act on.",
             },
             {
               step: "Step 4",
               title: "Close your position.",
-              body: "Exit whenever you choose and realize your profit or loss. There are no fixed expiries and no waiting for settlement.",
+              body: "Close your position and realize profit or loss with no expiry constraints.",
             },
           ].map((s, i) => (
             <div key={i} className="glass rounded-2xl p-7 sm:p-8">
@@ -159,12 +169,12 @@ function Index() {
         </div>
       </section>
 
-      {/* Network feed preview */}
+      {/* Attention Layer preview */}
       <section className="w-full px-5 sm:px-10 py-24 max-w-4xl mx-auto">
-        <div className="text-base tracking-[0.2em] text-white/60 uppercase mb-3 font-semibold">Network Feed</div>
-        <h2 className="headline text-4xl sm:text-5xl font-semibold text-white leading-[1.12] mb-5">Live from the chain.</h2>
+        <div className="text-base tracking-[0.2em] text-white/60 uppercase mb-3 font-semibold">Attention Layer</div>
+        <h2 className="headline text-4xl sm:text-5xl font-semibold text-white leading-[1.12] mb-5">Live Attention From Ethereum.</h2>
         <p className="text-white/50 text-base sm:text-lg leading-relaxed mb-12">
-          Watch gas and transaction activity update in real time. This is the data your positions are built on.
+          Blockchain activity is more than raw numbers. Every transaction and wallet interaction contributes to a live signal of where attention is flowing across Ethereum.
         </p>
         <div className="flex flex-col gap-5">
           {(["GAS", "TXS_PER_BLOCK"] as const).map((k) => (
@@ -213,14 +223,19 @@ function Index() {
       {/* Final CTA */}
       <section className="w-full px-5 sm:px-10 py-32 text-center max-w-4xl mx-auto">
         <h2 className="headline text-4xl sm:text-6xl font-semibold text-white leading-[1.1]">
-          The chain has a pulse. Trade it.
+          Most platforms show you blockchain data.
+          <br />
+          <span className="hero-span">ChainFlux helps you understand what it means.</span>
         </h2>
+        <p className="mt-8 text-white/50 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
+          Blockchain data has always been visible but never truly understood. ChainFlux turns it into a live Attention Market, helping you see what matters and trade the signals that move fast enough.
+        </p>
         <div className="mt-12">
           <button
-            onClick={() => navigate({ to: "/trade" })}
+            onClick={() => navigate({ to: "/feed" })}
             className="inline-flex items-center justify-center px-8 py-4 rounded-full bg-white text-black font-semibold hover:bg-white/90 transition-colors text-sm tracking-wide"
           >
-            Start Trading
+            Enter ChainFlux
             <svg className="ml-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
           </button>
         </div>
@@ -228,4 +243,4 @@ function Index() {
 
     </Layout>
   );
-  }
+   }
