@@ -14,7 +14,7 @@ import {
 
 export const Route = createFileRoute("/feed")({
   component: FeedPage,
-  head: () => ({ meta: [{ title: "Network Feed — ChainFlux" }] }),
+  head: () => ({ meta: [{ title: "The Attention Market — ChainFlux" }] }),
 });
 
 const STATE_COLORS = {
@@ -27,21 +27,96 @@ type Explanation = { happening: string; why: string; means: string; action: stri
 
 const EXPLANATIONS: Record<string, Record<"low" | "medium" | "high", Explanation>> = {
   GAS: {
-    low: { happening: "Gas fees are running below typical levels.", why: "Network demand is light and blocks have spare capacity.", means: "Transactions settle cheaply and quickly.", action: "Good time to execute large or complex on-chain operations." },
-    medium: { happening: "Gas is in its normal operating range.", why: "Moderate demand is keeping fees stable.", means: "Conditions are healthy and predictable.", action: "Proceed normally. No urgency to rush or delay." },
-    high: { happening: "Gas is elevated. The network is under pressure.", why: "High activity or a surge event is competing for block space.", means: "Transactions cost more and may take longer to confirm.", action: "Batch transactions, delay non-urgent actions, or watch for the spike to pass." },
+    low: {
+      happening: "Users are competing for block space, pushing transaction costs higher.",
+      why: "Increased onchain activity creates more demand for limited block space.",
+      means: "Rising gas often reflects heightened network demand, trading activity, or major protocol usage.",
+      action: "Watch for volatility. Spikes in gas often appear during periods of high market attention.",
+    },
+    medium: {
+      happening: "Users are competing for block space, pushing transaction costs higher.",
+      why: "Increased onchain activity creates more demand for limited block space.",
+      means: "Rising gas often reflects heightened network demand, trading activity, or major protocol usage.",
+      action: "Watch for volatility. Spikes in gas often appear during periods of high market attention.",
+    },
+    high: {
+      happening: "Users are competing for block space, pushing transaction costs higher.",
+      why: "Increased onchain activity creates more demand for limited block space.",
+      means: "Rising gas often reflects heightened network demand, trading activity, or major protocol usage.",
+      action: "Watch for volatility. Spikes in gas often appear during periods of high market attention.",
+    },
   },
   TXS_PER_BLOCK: {
-    low: { happening: "Transaction throughput is below average.", why: "Activity on Ethereum is quieter than usual.", means: "The market may be in a wait and see phase.", action: "Watch for a pickup in volume as a signal of incoming movement." },
-    medium: { happening: "Transaction volume is in a normal range.", why: "Regular user and protocol activity is sustaining baseline throughput.", means: "Ethereum is operating as expected.", action: "No action needed. Use as a baseline for comparison." },
-    high: { happening: "Transaction volume is surging.", why: "A high activity event such as a launch, airdrop, or liquidation cascade may be underway.", means: "On-chain momentum is strong. Something significant may be happening.", action: "Investigate the source. High transaction counts often precede price movement." },
+    low: {
+      happening: "More transactions are being included in each Ethereum block.",
+      why: "Increased usage from users, applications, and protocols is driving higher throughput.",
+      means: "Rising transaction counts usually indicate stronger network engagement and activity.",
+      action: "Sustained increases may signal growing ecosystem demand.",
+    },
+    medium: {
+      happening: "More transactions are being included in each Ethereum block.",
+      why: "Increased usage from users, applications, and protocols is driving higher throughput.",
+      means: "Rising transaction counts usually indicate stronger network engagement and activity.",
+      action: "Sustained increases may signal growing ecosystem demand.",
+    },
+    high: {
+      happening: "More transactions are being included in each Ethereum block.",
+      why: "Increased usage from users, applications, and protocols is driving higher throughput.",
+      means: "Rising transaction counts usually indicate stronger network engagement and activity.",
+      action: "Sustained increases may signal growing ecosystem demand.",
+    },
   },
   ACTIVE_ADDRESSES: {
-    low: { happening: "Barely anyone is transacting on Ethereum right now.", why: "Traders and users are sitting on the sidelines. Nobody wants to make a move yet.", means: "The network is in a quiet phase. Things can flip fast when activity returns.", action: "When addresses start spiking after a quiet period like this, momentum usually follows quickly." },
-    medium: { happening: "A decent number of wallets are active on the network right now.", why: "Normal participation across the board. Nothing extreme but the chain is alive and moving.", means: "Standard operating conditions. Liquidity is healthy and the market is functioning well.", action: "No rush. Keep an eye out for a breakout in activity before making any big moves." },
-    high: { happening: "A huge wave of wallets just hit the network at the same time.", why: "Something triggered mass participation. Could be a token launch, news event, or bot activity.", means: "The network is in high demand right now. Gas is likely rising and something is moving.", action: "Act fast or wait for things to calm down. High activity like this rarely stays quiet for long." },
+    low: {
+      happening: "More unique wallets are interacting with Ethereum.",
+      why: "New and existing participants are becoming more active onchain.",
+      means: "Rising address activity is one of the clearest indicators of network adoption.",
+      action: "Watch for continued growth. Expanding participation can signal increasing interest across the ecosystem.",
+    },
+    medium: {
+      happening: "More unique wallets are interacting with Ethereum.",
+      why: "New and existing participants are becoming more active onchain.",
+      means: "Rising address activity is one of the clearest indicators of network adoption.",
+      action: "Watch for continued growth. Expanding participation can signal increasing interest across the ecosystem.",
+    },
+    high: {
+      happening: "More unique wallets are interacting with Ethereum.",
+      why: "New and existing participants are becoming more active onchain.",
+      means: "Rising address activity is one of the clearest indicators of network adoption.",
+      action: "Watch for continued growth. Expanding participation can signal increasing interest across the ecosystem.",
+    },
   },
 };
+
+const ATTENTION_LABELS: Record<string, { color: string; ring: string; label: string; description: string }> = {
+  cooling: { color: "#818cf8", ring: "rgba(129,140,248,0.25)", label: "Attention Cooling", description: "Activity is slowing and network demand is easing." },
+  rising: { color: "#facc15", ring: "rgba(250,204,21,0.25)", label: "Attention Rising", description: "Participation and usage are increasing across the network." },
+  surging: { color: "#f97316", ring: "rgba(249,115,22,0.25)", label: "Attention Surging", description: "Demand is accelerating as more users and capital flow onchain." },
+  critical: { color: "#ef4444", ring: "rgba(239,68,68,0.25)", label: "Attention Critical", description: "Network activity is reaching exceptional levels and attention is concentrated across Ethereum." },
+};
+
+function getAttentionLevel(score: number): keyof typeof ATTENTION_LABELS {
+  if (score <= 30) return "cooling";
+  if (score <= 60) return "rising";
+  if (score <= 85) return "surging";
+  return "critical";
+}
+
+function computeAttentionScore(
+  gas: number, gasHigh: number, gasLow: number,
+  txs: number, txsHigh: number, txsLow: number,
+  addr: number, addrHigh: number, addrLow: number
+): number {
+  const norm = (v: number, lo: number, hi: number) => {
+    const range = hi - lo;
+    if (range <= 0) return 50;
+    return Math.min(100, Math.max(0, ((v - lo) / range) * 100));
+  };
+  const gasScore = norm(gas, gasLow, gasHigh);
+  const txsScore = norm(txs, txsLow, txsHigh);
+  const addrScore = norm(addr, addrLow, addrHigh);
+  return Math.round(gasScore * 0.4 + txsScore * 0.4 + addrScore * 0.2);
+}
 
 function formatValue(metric: string, value: number): string {
   if (value === 0) return "Loading";
@@ -50,13 +125,14 @@ function formatValue(metric: string, value: number): string {
 }
 
 function StateTag({ state }: { state: "low" | "medium" | "high" }) {
+  const labels = { low: "Cooling", medium: "Stable", high: "Surging" };
   const c = STATE_COLORS[state];
   return (
     <span
       className="inline-flex items-center text-[9px] tracking-[0.2em] uppercase px-2.5 py-1 rounded-full font-bold shrink-0"
       style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text }}
     >
-      {state}
+      {labels[state]}
     </span>
   );
 }
@@ -99,7 +175,7 @@ function useRollingValues(value: number, maxLen = 30) {
   return history;
 }
 
-function ExplainCell({ label, sublabel, text, icon, highlight }: { label: string; sublabel?: string; text: string; icon: React.ReactNode; highlight?: boolean; }) {
+function ExplainCell({ label, text, icon, highlight }: { label: string; text: string; icon: React.ReactNode; highlight?: boolean; }) {
   return (
     <div
       className="flex gap-3 p-4 rounded-xl h-full"
@@ -113,7 +189,6 @@ function ExplainCell({ label, sublabel, text, icon, highlight }: { label: string
       </div>
       <div className="flex flex-col gap-1 min-w-0">
         <div className="text-[9px] tracking-[0.22em] uppercase font-semibold text-white/50">{label}</div>
-        {sublabel && <div className="text-[9px] tracking-wider uppercase text-white/20 mb-0.5">{sublabel}</div>}
         <div className="text-sm leading-relaxed" style={{ color: highlight ? "rgba(255,255,255,0.82)" : "rgba(255,255,255,0.48)" }}>
           {text}
         </div>
@@ -133,6 +208,69 @@ function EthLogo() {
         <polygon points="127.9611,287.9577 255.9211,212.3207 127.9611,154.1587" fill="rgba(255,255,255,0.35)" />
         <polygon points="0.0009,212.3207 127.9609,287.9577 127.9609,154.1587" fill="rgba(255,255,255,0.25)" />
       </svg>
+    </div>
+  );
+}
+
+function AttentionScoreCard({ score }: { score: number }) {
+  const level = getAttentionLevel(score);
+  const info = ATTENTION_LABELS[level];
+  const circumference = 2 * Math.PI * 54;
+  const filled = (score / 100) * circumference;
+
+  return (
+    <div
+      className="rounded-2xl p-6 sm:p-8 mb-4 relative overflow-hidden"
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "2px solid rgba(255,255,255,0.18)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+      }}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-10">
+        <div className="relative w-36 h-36 mx-auto sm:mx-0 shrink-0">
+          <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
+            <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
+            <circle
+              cx="60" cy="60" r="54"
+              fill="none"
+              stroke={info.color}
+              strokeWidth="8"
+              strokeLinecap="round"
+              strokeDasharray={`${filled} ${circumference}`}
+              style={{ transition: "stroke-dasharray 1s ease" }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <div className="text-4xl font-bold text-white tabular-nums leading-none">{score}</div>
+            <div className="text-[9px] tracking-[0.2em] uppercase text-white/30 mt-1">Score</div>
+          </div>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] tracking-[0.25em] uppercase text-white/40 mb-3 font-semibold">Network Attention</div>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="relative flex items-center justify-center shrink-0" style={{ width: 18, height: 18 }}>
+              <div
+                className="absolute rounded-full"
+                style={{ width: 18, height: 18, background: info.ring }}
+              />
+              <div
+                className="relative rounded-full"
+                style={{ width: 9, height: 9, background: info.color }}
+              />
+            </div>
+            <div className="text-2xl sm:text-3xl font-bold text-white leading-tight">
+              {info.label}
+            </div>
+          </div>
+          <p className="text-white/50 text-sm leading-relaxed mb-4">{info.description}</p>
+          <p className="text-white/30 text-xs leading-relaxed">
+            A real time measure of activity across Ethereum. Higher scores indicate increasing demand, participation, and network usage.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -225,13 +363,13 @@ function FeedRow({ label, unit, value, metricKey, dailyHigh, dailyLow }: { label
           style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
         >
           <div className="pt-4">
-            <ExplainCell label="What Is Happening?" sublabel="Describe the on-chain activity" text={explanation.happening} icon={<Pulse size={16} weight="duotone" />} />
+            <ExplainCell label="What Is Happening" text={explanation.happening} icon={<Pulse size={16} weight="duotone" />} />
           </div>
           <div className="pt-4">
-            <ExplainCell label="Why Is This Happening?" sublabel="Explain possible causes" text={explanation.why} icon={<ChartBar size={16} weight="duotone" />} />
+            <ExplainCell label="Why Is This Happening" text={explanation.why} icon={<ChartBar size={16} weight="duotone" />} />
           </div>
           <div className="pt-0 sm:pt-3">
-            <ExplainCell label="What Does It Mean?" sublabel="Significance and market context" text={explanation.means} icon={<Diamond size={16} weight="duotone" />} />
+            <ExplainCell label="What Does It Mean" text={explanation.means} icon={<Diamond size={16} weight="duotone" />} />
           </div>
           <div className="pt-0 sm:pt-3">
             <ExplainCell label="Possible Reactions" text={explanation.action} icon={<Lightning size={16} weight="duotone" />} highlight />
@@ -247,29 +385,50 @@ function FeedPage() {
   const gas = useMarket("GAS");
   const txs = useMarket("TXS_PER_BLOCK");
 
+  const attentionScore = computeAttentionScore(
+    gas.current, feed.GAS_DAILY_HIGH ?? 0, feed.GAS_DAILY_LOW ?? 0,
+    txs.current, feed.TXS_DAILY_HIGH ?? 0, feed.TXS_DAILY_LOW ?? 0,
+    feed.ACTIVE_ADDRESSES ?? 0, feed.ACTIVE_DAILY_HIGH ?? 0, feed.ACTIVE_DAILY_LOW ?? 0,
+  );
+
   return (
     <Layout>
       <div className="fixed inset-0 pointer-events-none" style={{ background: "#000000" }} />
 
       <div className="relative z-10 pt-32 pb-24 mx-auto max-w-7xl px-4 sm:px-8">
-        <div className="relative mb-14">
+
+        <div className="relative mb-12">
           <EthLogo />
           <div className="relative z-10 pr-32 sm:pr-56">
+            <div className="text-[10px] tracking-[0.25em] uppercase text-white/40 mb-4 font-semibold">The Attention Market</div>
             <h1 className="text-4xl sm:text-5xl font-bold text-white tracking-tight leading-tight mb-4">
-              Live intelligence for the Ethereum network.
+              Live Attention From Ethereum.
             </h1>
             <p className="text-white/40 text-base leading-relaxed max-w-xl">
-              Follow the metrics that drive on-chain activity and uncover shifts before they become obvious.
+              Blockchain activity is more than numbers. Every transaction, wallet, and interaction tells a story about where attention is flowing. ChainFlux turns raw activity into signals you can understand at a glance.
             </p>
           </div>
         </div>
+
+        <AttentionScoreCard score={attentionScore} />
+
+        <div className="flex items-center gap-4 my-8">
+          <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+          <div className="text-[9px] tracking-[0.25em] uppercase text-white/25 font-semibold">Network Demand</div>
+          <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+        </div>
+
+        <p className="text-white/30 text-sm leading-relaxed mb-6 max-w-xl">
+          Is Ethereum becoming busier or quieter? Track the signals that reveal whether network activity is accelerating or slowing down.
+        </p>
 
         <div className="flex flex-col gap-4">
           <FeedRow label="Gas Price" unit="gwei" value={gas.current} metricKey="GAS" dailyHigh={feed.GAS_DAILY_HIGH} dailyLow={feed.GAS_DAILY_LOW} />
           <FeedRow label="Transactions Per Block" unit="txs" value={txs.current} metricKey="TXS_PER_BLOCK" dailyHigh={feed.TXS_DAILY_HIGH} dailyLow={feed.TXS_DAILY_LOW} />
           <FeedRow label="Active Addresses" unit="addresses" value={feed.ACTIVE_ADDRESSES} metricKey="ACTIVE_ADDRESSES" dailyHigh={feed.ACTIVE_DAILY_HIGH} dailyLow={feed.ACTIVE_DAILY_LOW} />
         </div>
+
       </div>
     </Layout>
   );
-           }
+      }
