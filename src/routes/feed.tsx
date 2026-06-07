@@ -23,6 +23,12 @@ const STATE_COLORS = {
   high: { bg: "rgba(16,185,129,0.10)", border: "rgba(16,185,129,0.22)", text: "rgba(110,231,183,0.9)", bar: "#34d399", iconBg: "rgba(16,185,129,0.15)", iconColor: "#6ee7b7" },
 };
 
+const STATE_SEGMENT_COLORS: Record<"low" | "medium" | "high", string> = {
+  low: "#818cf8",
+  medium: "#facc15",
+  high: "#34d399",
+};
+
 type Explanation = { happening: string; why: string; means: string; action: string; };
 
 const EXPLANATIONS: Record<string, Record<"low" | "medium" | "high", Explanation>> = {
@@ -212,7 +218,164 @@ function EthLogo() {
   );
 }
 
-function AttentionScoreCard({ score }: { score: number }) {
+function buildNetworkSummary(
+  gasState: "low" | "medium" | "high",
+  txsState: "low" | "medium" | "high",
+  addrState: "low" | "medium" | "high"
+): string {
+  const gasDesc: Record<"low" | "medium" | "high", string> = {
+    low: "Gas fees are low, indicating minimal competition for block space.",
+    medium: "Gas fees are at a moderate level, reflecting steady but unremarkable demand for block space.",
+    high: "Gas fees are elevated, signaling strong competition for block space and high execution demand.",
+  };
+  const txsDesc: Record<"low" | "medium" | "high", string> = {
+    low: "Block throughput is quiet, with relatively few transactions being processed.",
+    medium: "Blocks are processing a steady volume of transactions without any notable congestion.",
+    high: "Blocks are filling with a high number of transactions, reflecting intense network usage.",
+  };
+  const addrDesc: Record<"low" | "medium" | "high", string> = {
+    low: "Wallet participation is light, with fewer unique addresses active on the network.",
+    medium: "Wallet participation is moderate, with a typical number of addresses transacting.",
+    high: "Wallet participation is broad, with a large number of unique addresses active across the network.",
+  };
+
+  const allHigh = gasState === "high" && txsState === "high" && addrState === "high";
+  const allLow = gasState === "low" && txsState === "low" && addrState === "low";
+  const mostlyHigh = [gasState, txsState, addrState].filter(s => s === "high").length >= 2;
+  const mostlyLow = [gasState, txsState, addrState].filter(s => s === "low").length >= 2;
+
+  let closing = "";
+  if (allHigh) {
+    closing = "All three signals are elevated simultaneously, which is a strong indicator of coordinated network demand and broad user activity.";
+  } else if (allLow) {
+    closing = "The network is quiet across all dimensions with no signs of unusual demand, congestion, or elevated participation.";
+  } else if (mostlyHigh) {
+    closing = "The majority of network signals are elevated, suggesting broad demand is building even if not every metric is at its peak.";
+  } else if (mostlyLow) {
+    closing = "Most signals are subdued, pointing to a generally quiet network with limited pressure across gas, throughput, and participation.";
+  } else {
+    closing = "Signals are mixed across the network, reflecting uneven activity rather than a uniform shift in one direction.";
+  }
+
+  return `${gasDesc[gasState]} ${txsDesc[txsState]} ${addrDesc[addrState]} ${closing}`;
+}
+
+function ArcBreakdown({
+  gasState,
+  txsState,
+  addrState,
+}: {
+  gasState: "low" | "medium" | "high";
+  txsState: "low" | "medium" | "high";
+  addrState: "low" | "medium" | "high";
+}) {
+  const cx = 60;
+  const cy = 60;
+  const r = 48;
+  const strokeWidth = 10;
+  const gap = 0.04;
+
+  // Weights: gas 40%, txs 40%, addr 20%
+  // Full circle = 2*PI. Each segment = weight * (2*PI - total_gap)
+  const totalGap = gap * 3;
+  const total = 2 * Math.PI - totalGap;
+  const segments = [
+    { label: "Gas", weight: 0.4, state: gasState },
+    { label: "TXS", weight: 0.4, state: txsState },
+    { label: "Addresses", weight: 0.2, state: addrState },
+  ];
+
+  let currentAngle = -Math.PI / 2;
+
+  const arcs = segments.map((seg) => {
+    const sweep = seg.weight * total;
+    const startAngle = currentAngle + gap / 2;
+    const endAngle = startAngle + sweep;
+    currentAngle = endAngle + gap / 2;
+
+    const x1 = cx + r * Math.cos(startAngle);
+    const y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle);
+    const y2 = cy + r * Math.sin(endAngle);
+    const largeArc = sweep > Math.PI ? 1 : 0;
+
+    const color = STATE_SEGMENT_COLORS[seg.state];
+    const midAngle = (startAngle + endAngle) / 2;
+    const labelR = r + 20;
+    const lx = cx + labelR * Math.cos(midAngle);
+    const ly = cy + labelR * Math.sin(midAngle);
+
+    return { seg, color, x1, y1, x2, y2, largeArc, lx, ly };
+  });
+
+  const summary = buildNetworkSummary(gasState, txsState, addrState);
+  const stateLabel: Record<"low" | "medium" | "high", string> = { low: "Cooling", medium: "Stable", high: "Surging" };
+
+  return (
+    <div
+      className="mt-6 pt-6"
+      style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+    >
+      <div className="flex flex-col sm:flex-row gap-6 sm:gap-10 items-start">
+
+        {/* Arc chart */}
+        <div className="shrink-0 mx-auto sm:mx-0">
+          <svg width={160} height={160} viewBox="0 0 120 120">
+            {/* Background track */}
+            <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={strokeWidth} />
+            {arcs.map(({ seg, color, x1, y1, x2, y2, largeArc }) => (
+              <path
+                key={seg.label}
+                d={`M${x1},${y1} A${r},${r} 0 ${largeArc},1 ${x2},${y2}`}
+                fill="none"
+                stroke={color}
+                strokeWidth={strokeWidth}
+                strokeLinecap="round"
+              />
+            ))}
+          </svg>
+        </div>
+
+        {/* Segment legend */}
+        <div className="flex flex-col gap-3 flex-1 min-w-0">
+          {arcs.map(({ seg, color }) => (
+            <div key={seg.label} className="flex items-center gap-3">
+              <div
+                className="shrink-0 rounded-full"
+                style={{ width: 10, height: 10, background: color }}
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-white/80">{seg.label}</span>
+                  <span className="text-[9px] tracking-[0.18em] uppercase text-white/30">{Math.round(seg.weight * 100)}%</span>
+                </div>
+                <div className="text-[11px] text-white/40 mt-0.5">{stateLabel[seg.state]}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Combined network summary */}
+      <p className="text-sm leading-relaxed text-white/55 mt-6">
+        {summary}
+      </p>
+    </div>
+  );
+}
+
+function AttentionScoreCard({
+  score,
+  gasState,
+  txsState,
+  addrState,
+}: {
+  score: number;
+  gasState: "low" | "medium" | "high";
+  txsState: "low" | "medium" | "high";
+  addrState: "low" | "medium" | "high";
+}) {
+  const [expanded, setExpanded] = useState(false);
   const level = getAttentionLevel(score);
   const info = ATTENTION_LABELS[level];
   const circumference = 2 * Math.PI * 54;
@@ -220,13 +383,15 @@ function AttentionScoreCard({ score }: { score: number }) {
 
   return (
     <div
-      className="rounded-2xl p-6 sm:p-8 mb-4 relative overflow-hidden"
+      className="rounded-2xl p-6 sm:p-8 mb-4 relative overflow-hidden cursor-pointer select-none"
       style={{
         background: "rgba(255,255,255,0.04)",
-        border: "2px solid rgba(255,255,255,0.18)",
+        border: `2px solid ${expanded ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.18)"}`,
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
+        transition: "border-color 0.2s ease",
       }}
+      onClick={() => setExpanded((e) => !e)}
     >
       <div className="flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-10">
         <div className="relative w-36 h-36 mx-auto sm:mx-0 shrink-0">
@@ -270,7 +435,21 @@ function AttentionScoreCard({ score }: { score: number }) {
             A real time measure of activity across Ethereum. Higher scores indicate increasing demand, participation, and network usage.
           </p>
         </div>
+
+        {/* Tap hint */}
+        <div
+          className="shrink-0 text-white/25 transition-transform duration-300 self-start sm:self-center ml-auto sm:ml-0"
+          style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M2 5L7 10L12 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
       </div>
+
+      {expanded && (
+        <ArcBreakdown gasState={gasState} txsState={txsState} addrState={addrState} />
+      )}
     </div>
   );
 }
@@ -385,6 +564,10 @@ function FeedPage() {
   const gas = useMarket("GAS");
   const txs = useMarket("TXS_PER_BLOCK");
 
+  const gasState = getMetricState("GAS", gas.current);
+  const txsState = getMetricState("TXS_PER_BLOCK", txs.current);
+  const addrState = getMetricState("ACTIVE_ADDRESSES", feed.ACTIVE_ADDRESSES ?? 0);
+
   const attentionScore = computeAttentionScore(
     gas.current, feed.GAS_DAILY_HIGH ?? 0, feed.GAS_DAILY_LOW ?? 0,
     txs.current, feed.TXS_DAILY_HIGH ?? 0, feed.TXS_DAILY_LOW ?? 0,
@@ -410,7 +593,12 @@ function FeedPage() {
           </div>
         </div>
 
-        <AttentionScoreCard score={attentionScore} />
+        <AttentionScoreCard
+          score={attentionScore}
+          gasState={gasState}
+          txsState={txsState}
+          addrState={addrState}
+        />
 
         <div className="flex items-center gap-4 my-8">
           <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
@@ -431,4 +619,4 @@ function FeedPage() {
       </div>
     </Layout>
   );
-      }
+}
