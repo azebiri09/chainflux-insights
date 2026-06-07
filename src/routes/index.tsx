@@ -197,7 +197,7 @@ function Index() {
         <h2 className="headline text-4xl sm:text-6xl font-semibold text-white leading-[1.1]">
           Most platforms show you blockchain data.
           <br />
-          <span className="hero-span">ChainFlux helps you understand what it means.</span>
+          <span className="hero-span">ChainFlux turns it into clear signals you can actually act on.</span>
         </h2>
         <p className="mt-8 text-white/50 text-base sm:text-lg max-w-2xl leading-relaxed">
           Blockchain data has always been visible but never truly understood. ChainFlux turns it into a live Attention Market, helping you see what matters and trade the signals that move fast enough.
