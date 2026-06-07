@@ -311,7 +311,7 @@ function TradePage() {
                 )}
               </div>
 
-              <TradingChart market={market} chartType={chartType} timeframe={timeframe} />
+              <TradingChart data={m.history} type={chartType} timeframe={timeframe} />
             </div>
           </div>
 
