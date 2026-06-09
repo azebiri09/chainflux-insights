@@ -12,10 +12,10 @@ import {
   Diamond,
   Gauge,
   CurrencyDollar,
-  Fish,
   ArrowsHorizontal,
   Coin,
   Drop,
+  ArrowFatLinesUp,
 } from "@phosphor-icons/react";
 
 export const Route = createFileRoute("/feed")({
@@ -284,7 +284,6 @@ function computeMarketPhase(
   whaleState: "low" | "medium" | "high"
 ): MarketPhase {
   const stateScore = (s: "low" | "medium" | "high") => s === "high" ? 2 : s === "medium" ? 1 : 0;
-
   const demandScore = stateScore(gasState) + stateScore(txsState) + stateScore(addrState);
   const liquidityScore = stateScore(dexState) + stateScore(bridgeState) + stateScore(stableState);
   const stressScore = stateScore(liqState) + stateScore(whaleState);
@@ -298,7 +297,6 @@ function computeMarketPhase(
       interpretation: "Attention is low. Users are inactive and capital is largely idle. Historically these phases precede expansion when demand returns.",
     };
   }
-
   if (score <= 60) {
     if (liquidityScore >= demandScore && liquidityScore >= stressScore) {
       return {
@@ -317,7 +315,6 @@ function computeMarketPhase(
       interpretation: "More wallets are entering and usage is picking up. This is often the start of a trend formation phase as participation expands.",
     };
   }
-
   if (score <= 85) {
     if (stressScore >= 3) {
       return {
@@ -336,7 +333,6 @@ function computeMarketPhase(
       interpretation: "Network participation is elevated. Liquidity, trading, and execution demand are all active. The chain is operating under meaningful pressure.",
     };
   }
-
   return {
     label: "Overheat Zone",
     color: "#ef4444",
@@ -541,15 +537,17 @@ function buildNetworkSummary(
 function AnimatedDonut({
   segments,
   animate,
+  size = 220,
 }: {
   segments: { label: string; weight: number; state: "low" | "medium" | "high" }[];
   animate: boolean;
+  size?: number;
 }) {
-  const cx = 80;
-  const cy = 80;
-  const r = 62;
-  const strokeWidth = 14;
-  const gap = 0.03;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size * 0.38;
+  const strokeWidth = size * 0.09;
+  const gap = 0.025;
   const totalGap = gap * segments.length;
   const total = 2 * Math.PI - totalGap;
 
@@ -572,11 +570,11 @@ function AnimatedDonut({
   });
 
   return (
-    <svg width={160} height={160} viewBox={`0 0 ${cx * 2} ${cy * 2}`}>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <defs>
         {arcs.map(({ seg, glow }) => (
-          <filter key={`glow-${seg.label}`} id={`glow-${seg.label}`} x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="3" result="blur" />
+          <filter key={`glow-${seg.label}`} id={`glow-${seg.label}-${size}`} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
             <feFlood floodColor={glow} result="color" />
             <feComposite in="color" in2="blur" operator="in" result="shadow" />
             <feMerge><feMergeNode in="shadow" /><feMergeNode in="SourceGraphic" /></feMerge>
@@ -592,11 +590,11 @@ function AnimatedDonut({
           stroke={color}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
-          filter={`url(#glow-${seg.label})`}
+          filter={`url(#glow-${seg.label}-${size})`}
           style={{
             strokeDasharray: totalLen,
             strokeDashoffset: animate ? 0 : totalLen,
-            transition: animate ? `stroke-dashoffset 0.9s cubic-bezier(0.4,0,0.2,1)` : "none",
+            transition: animate ? `stroke-dashoffset 1.1s cubic-bezier(0.4,0,0.2,1)` : "none",
           }}
         />
       ))}
@@ -608,6 +606,7 @@ function ScoreBreakdown({
   gasState, txsState, addrState, gasValue, txsValue, addrValue,
   utilState, utilValue, dexState, dexValue, whaleState, whaleValue,
   bridgeState, bridgeValue, stableState, stableValue, liqState, liqValue,
+  score,
 }: {
   gasState: "low" | "medium" | "high"; txsState: "low" | "medium" | "high"; addrState: "low" | "medium" | "high";
   gasValue: number; txsValue: number; addrValue: number;
@@ -617,6 +616,7 @@ function ScoreBreakdown({
   bridgeState: "low" | "medium" | "high"; bridgeValue: number;
   stableState: "low" | "medium" | "high"; stableValue: number;
   liqState: "low" | "medium" | "high"; liqValue: number;
+  score: number;
 }) {
   const [animate, setAnimate] = useState(false);
   useEffect(() => {
@@ -626,6 +626,8 @@ function ScoreBreakdown({
 
   const summary = buildNetworkSummary(gasState, txsState, addrState);
   const stateLabel: Record<"low" | "medium" | "high", string> = { low: "Cooling", medium: "Stable", high: "Surging" };
+  const level = getAttentionLevel(score);
+  const info = ATTENTION_LABELS[level];
 
   const segments = [
     { label: "Gas", weight: 0.20, state: gasState },
@@ -645,7 +647,7 @@ function ScoreBreakdown({
     { label: "Active Addresses", key: "ACTIVE_ADDRESSES", weight: "10%", state: addrState, value: addrValue > 0 ? Math.round(addrValue).toLocaleString() : "Loading", icon: <Users size={18} weight="duotone" /> },
     { label: "Network Utilization", key: "NET_UTILIZATION", weight: "15%", state: utilState, value: utilValue > 0 ? `${utilValue.toFixed(1)}%` : "Loading", icon: <Gauge size={18} weight="duotone" /> },
     { label: "DEX Volume 24h", key: "DEX_VOLUME", weight: "10%", state: dexState, value: dexValue > 0 ? formatValue("DEX_VOLUME", dexValue) : "Loading", icon: <CurrencyDollar size={18} weight="duotone" /> },
-    { label: "Whale Transactions", key: "WHALE_TXNS", weight: "10%", state: whaleState, value: whaleValue > 0 ? formatValue("WHALE_TXNS", whaleValue) : "Loading", icon: <Fish size={18} weight="duotone" /> },
+    { label: "Whale Transactions", key: "WHALE_TXNS", weight: "10%", state: whaleState, value: whaleValue > 0 ? formatValue("WHALE_TXNS", whaleValue) : "Loading", icon: <ArrowFatLinesUp size={18} weight="duotone" /> },
     { label: "Bridge Flows", key: "BRIDGE_FLOWS", weight: "5%", state: bridgeState, value: bridgeValue > 0 ? formatValue("BRIDGE_FLOWS", bridgeValue) : "Loading", icon: <ArrowsHorizontal size={18} weight="duotone" /> },
     { label: "Stablecoin Flows", key: "STABLECOIN_FLOWS", weight: "5%", state: stableState, value: stableValue > 0 ? formatValue("STABLECOIN_FLOWS", stableValue) : "Loading", icon: <Coin size={18} weight="duotone" /> },
     { label: "Liquidations", key: "LIQUIDATIONS", weight: "5%", state: liqState, value: liqValue > 0 ? formatValue("LIQUIDATIONS", liqValue) : "Loading", icon: <Drop size={18} weight="duotone" /> },
@@ -653,38 +655,51 @@ function ScoreBreakdown({
 
   return (
     <div className="mt-6 pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.10)" }}>
-      <div className="flex flex-col sm:flex-row gap-8 items-start">
-        <div className="shrink-0 mx-auto sm:mx-0">
-          <AnimatedDonut segments={segments} animate={animate} />
+      <div className="flex flex-col items-center mb-8">
+        <div className="relative">
+          <AnimatedDonut segments={segments} animate={animate} size={240} />
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <div className="text-5xl font-bold tabular-nums leading-none" style={{ color: info.color }}>{score}</div>
+            <div className="text-[9px] tracking-[0.25em] uppercase mt-2" style={{ color: "rgba(255,255,255,0.55)" }}>Attention Score</div>
+          </div>
         </div>
-        <div className="flex flex-col gap-2 flex-1 min-w-0 w-full">
-          {rows.map((row) => {
-            const color = STATE_SEGMENT_COLORS[row.state];
-            const glow = STATE_GLOW[row.state];
-            const c = STATE_COLORS[row.state];
-            return (
-              <div
-                key={row.key}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${c.border}`, boxShadow: `0 0 12px ${glow}` }}
-              >
-                <div className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: c.iconBg, color: c.iconColor }}>
-                  {row.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-white font-semibold text-xs leading-tight truncate">{row.label}</div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[8px] tracking-[0.15em] uppercase font-bold px-1.5 py-0.5 rounded-full" style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}` }}>
-                      {stateLabel[row.state]}
-                    </span>
-                    <span className="text-[9px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.45)" }}>{row.weight}</span>
-                  </div>
-                </div>
-                <div className="shrink-0 text-right font-bold tabular-nums text-sm" style={{ color }}>{row.value}</div>
+        <div className="flex flex-wrap justify-center gap-2 mt-4">
+          {segments.map((seg) => (
+            <div key={seg.label} className="flex items-center gap-1.5 px-2 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)" }}>
+              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: STATE_SEGMENT_COLORS[seg.state] }} />
+              <span className="text-[9px] tracking-wider uppercase font-semibold" style={{ color: "rgba(255,255,255,0.65)" }}>{seg.label}</span>
+              <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.35)" }}>{(seg.weight * 100).toFixed(0)}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex flex-col gap-2">
+        {rows.map((row) => {
+          const color = STATE_SEGMENT_COLORS[row.state];
+          const glow = STATE_GLOW[row.state];
+          const c = STATE_COLORS[row.state];
+          return (
+            <div
+              key={row.key}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+              style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${c.border}`, boxShadow: `0 0 12px ${glow}` }}
+            >
+              <div className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: c.iconBg, color: c.iconColor }}>
+                {row.icon}
               </div>
-            );
-          })}
-        </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-white font-semibold text-xs leading-tight truncate">{row.label}</div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[8px] tracking-[0.15em] uppercase font-bold px-1.5 py-0.5 rounded-full" style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}` }}>
+                    {stateLabel[row.state]}
+                  </span>
+                  <span className="text-[9px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.45)" }}>{row.weight}</span>
+                </div>
+              </div>
+              <div className="shrink-0 text-right font-bold tabular-nums text-sm" style={{ color }}>{row.value}</div>
+            </div>
+          );
+        })}
       </div>
       <div className="mt-6 p-5 rounded-xl" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)" }}>
         <div className="text-[9px] tracking-[0.25em] uppercase font-semibold mb-3" style={{ color: "rgba(255,255,255,0.55)" }}>Network Summary</div>
@@ -773,6 +788,7 @@ function AttentionScoreCard({
       </div>
       {expanded && (
         <ScoreBreakdown
+          score={score}
           gasState={gasState} txsState={txsState} addrState={addrState}
           gasValue={gasValue} txsValue={txsValue} addrValue={addrValue}
           utilState={utilState} utilValue={utilValue}
@@ -811,7 +827,7 @@ function FeedRow({
     ACTIVE_ADDRESSES: <Users size={20} weight="duotone" />,
     NET_UTILIZATION: <Gauge size={20} weight="duotone" />,
     DEX_VOLUME: <CurrencyDollar size={20} weight="duotone" />,
-    WHALE_TXNS: <Fish size={20} weight="duotone" />,
+    WHALE_TXNS: <ArrowFatLinesUp size={20} weight="duotone" />,
     BRIDGE_FLOWS: <ArrowsHorizontal size={20} weight="duotone" />,
     STABLECOIN_FLOWS: <Coin size={20} weight="duotone" />,
     LIQUIDATIONS: <Drop size={20} weight="duotone" />,
@@ -899,13 +915,11 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
       .then(r => r.json()),
     fetch("https://api.llama.fi/overview/dexs/ethereum?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyVolume")
       .then(r => r.json()),
-    fetch("https://bridges.llama.fi/bridge/12")
+    fetch("https://bridges.llama.fi/bridges?includeChains=true")
       .then(r => r.json()),
     fetch("https://stablecoins.llama.fi/stablecoinchains")
       .then(r => r.json()),
-    fetch("https://api.llama.fi/liquidations/ethereum")
-      .then(r => r.json()),
-    fetch(`https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=0x00000000219ab540356cBB839Cbe05303d7705Fa&startblock=0&endblock=99999999&page=1&offset=20&sort=desc&apikey=${etherscanKey}`)
+    fetch("https://api.llama.fi/overview/options/ethereum?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyNotionalVolume")
       .then(r => r.json()),
   ]);
 
@@ -930,7 +944,17 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
   if (results[2].status === "fulfilled") {
     try {
       const data = results[2].value;
-      bridgeVolume = data?.currentDayVolume ?? data?.lastDayUsdVolume ?? 0;
+      if (Array.isArray(data?.bridges)) {
+        const eth = data.bridges.find((b: any) =>
+          b.displayName?.toLowerCase().includes("ethereum") ||
+          b.name?.toLowerCase().includes("ethereum")
+        );
+        bridgeVolume = eth?.lastDailyVolume ?? eth?.currentDayVolume ?? 0;
+        if (bridgeVolume === 0) {
+          bridgeVolume = data.bridges.reduce((acc: number, b: any) => acc + (b.lastDailyVolume ?? 0), 0);
+          bridgeVolume = bridgeVolume / Math.max(data.bridges.length, 1);
+        }
+      }
     } catch { bridgeVolume = 0; }
   }
 
@@ -940,7 +964,13 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
       const chains = results[3].value;
       if (Array.isArray(chains)) {
         const eth = chains.find((c: any) => c.name?.toLowerCase() === "ethereum");
-        stableVolume = Math.abs(eth?.change_1d ?? 0);
+        const rawChange = eth?.change_1d ?? 0;
+        stableVolume = Math.abs(rawChange);
+        if (stableVolume === 0) {
+          stableVolume = eth?.totalCirculatingUSD?.peggedUSD
+            ? eth.totalCirculatingUSD.peggedUSD * 0.001
+            : 0;
+        }
       }
     } catch { stableVolume = 0; }
   }
@@ -949,25 +979,26 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
   if (results[4].status === "fulfilled") {
     try {
       const data = results[4].value;
-      liqVolume = data?.totalLiquidatable ?? data?.total ?? 0;
+      liqVolume = data?.total24h ?? data?.totalNotionalVolume24h ?? 0;
     } catch { liqVolume = 0; }
   }
 
   let whaleVolume = 0;
-  if (results[5].status === "fulfilled") {
-    try {
-      const txs = results[5].value?.result;
-      if (Array.isArray(txs)) {
-        whaleVolume = txs.reduce((acc: number, tx: any) => {
-          const val = parseFloat(tx.value) / 1e18;
-          return val > 10 ? acc + val * 2500 : acc;
-        }, 0);
-      }
-    } catch { whaleVolume = 0; }
-  }
+  try {
+    const whaleFetch = await fetch(
+      `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2&startblock=0&endblock=99999999&page=1&offset=50&sort=desc&apikey=${etherscanKey}`
+    ).then(r => r.json());
+    const txs = whaleFetch?.result;
+    if (Array.isArray(txs)) {
+      whaleVolume = txs.reduce((acc: number, tx: any) => {
+        const val = parseFloat(tx.value) / 1e18;
+        return val > 5 ? acc + val * 2500 : acc;
+      }, 0);
+    }
+  } catch { whaleVolume = 0; }
 
-  const estimate = (v: number) => ({ hi: v * 1.5 + 1, lo: v * 0.5 });
-  const util = estimate(utilization);
+  const estimate = (v: number, floor = 0) => ({ hi: v * 1.8 + 1, lo: Math.max(v * 0.3, floor) });
+  const util = { hi: 100, lo: 0 };
   const dex = estimate(dexVolume);
   const whale = estimate(whaleVolume);
   const bridge = estimate(bridgeVolume);
@@ -975,7 +1006,7 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
   const liq = estimate(liqVolume);
 
   return {
-    utilization, utilizationHigh: Math.max(util.hi, 100), utilizationLow: Math.max(util.lo, 0),
+    utilization, utilizationHigh: util.hi, utilizationLow: util.lo,
     dexVolume, dexHigh: dex.hi, dexLow: dex.lo,
     whaleVolume, whaleHigh: whale.hi, whaleLow: whale.lo,
     bridgeVolume, bridgeHigh: bridge.hi, bridgeLow: bridge.lo,
