@@ -545,56 +545,67 @@ function AnimatedDonut({
 }) {
   const cx = size / 2;
   const cy = size / 2;
-  const r = size * 0.38;
-  const strokeWidth = size * 0.09;
-  const gap = 0.025;
-  const totalGap = gap * segments.length;
-  const total = 2 * Math.PI - totalGap;
+  const r = size * 0.36;
+  const strokeWidth = size * 0.10;
+  const circumference = 2 * Math.PI * r;
+  const gapDeg = 3;
+  const gapFraction = (gapDeg / 360) * circumference;
+  const totalGap = gapFraction * segments.length;
+  const usable = circumference - totalGap;
 
-  let currentAngle = -Math.PI / 2;
-
+  let offset = 0;
   const arcs = segments.map((seg) => {
-    const sweep = seg.weight * total;
-    const startAngle = currentAngle + gap / 2;
-    const endAngle = startAngle + sweep;
-    currentAngle = endAngle + gap / 2;
-    const x1 = cx + r * Math.cos(startAngle);
-    const y1 = cy + r * Math.sin(startAngle);
-    const x2 = cx + r * Math.cos(endAngle);
-    const y2 = cy + r * Math.sin(endAngle);
-    const largeArc = sweep > Math.PI ? 1 : 0;
+    const segLen = seg.weight * usable;
+    const dashArray = `${segLen} ${circumference - segLen}`;
+    const dashOffset = -(offset);
+    offset += segLen + gapFraction;
     const color = STATE_SEGMENT_COLORS[seg.state];
     const glow = STATE_GLOW[seg.state];
-    const totalLen = sweep * r;
-    return { seg, color, glow, x1, y1, x2, y2, largeArc, totalLen };
+    return { seg, color, glow, dashArray, dashOffset, segLen };
   });
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      style={{ transform: "rotate(-90deg)" }}
+    >
       <defs>
         {arcs.map(({ seg, glow }) => (
           <filter key={`glow-${seg.label}`} id={`glow-${seg.label}-${size}`} x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feGaussianBlur stdDeviation="3" result="blur" />
             <feFlood floodColor={glow} result="color" />
             <feComposite in="color" in2="blur" operator="in" result="shadow" />
             <feMerge><feMergeNode in="shadow" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
         ))}
       </defs>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={strokeWidth} />
-      {arcs.map(({ seg, color, x1, y1, x2, y2, largeArc, totalLen }) => (
-        <path
+      <circle
+        cx={cx} cy={cy} r={r}
+        fill="none"
+        stroke="rgba(255,255,255,0.06)"
+        strokeWidth={strokeWidth}
+      />
+      {arcs.map(({ seg, color, dashArray, dashOffset, segLen }) => (
+        <circle
           key={seg.label}
-          d={`M${x1},${y1} A${r},${r} 0 ${largeArc},1 ${x2},${y2}`}
+          cx={cx} cy={cy} r={r}
           fill="none"
           stroke={color}
           strokeWidth={strokeWidth}
-          strokeLinecap="round"
+          strokeLinecap="butt"
+          strokeDasharray={dashArray}
+          strokeDashoffset={
+            animate
+              ? dashOffset
+              : dashOffset - segLen
+          }
           filter={`url(#glow-${seg.label}-${size})`}
           style={{
-            strokeDasharray: totalLen,
-            strokeDashoffset: animate ? 0 : totalLen,
-            transition: animate ? `stroke-dashoffset 1.1s cubic-bezier(0.4,0,0.2,1)` : "none",
+            transition: animate
+              ? `stroke-dashoffset 1.1s cubic-bezier(0.4,0,0.2,1) ${arcs.findIndex(a => a.seg.label === seg.label) * 0.08}s`
+              : "none",
           }}
         />
       ))}
@@ -620,7 +631,7 @@ function ScoreBreakdown({
 }) {
   const [animate, setAnimate] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setAnimate(true), 50);
+    const t = setTimeout(() => setAnimate(true), 80);
     return () => clearTimeout(t);
   }, []);
 
@@ -656,9 +667,9 @@ function ScoreBreakdown({
   return (
     <div className="mt-6 pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.10)" }}>
       <div className="flex flex-col items-center mb-8">
-        <div className="relative">
+        <div className="relative" style={{ width: 240, height: 240 }}>
           <AnimatedDonut segments={segments} animate={animate} size={240} />
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style={{ transform: "rotate(0deg)" }}>
             <div className="text-5xl font-bold tabular-nums leading-none" style={{ color: info.color }}>{score}</div>
             <div className="text-[9px] tracking-[0.25em] uppercase mt-2" style={{ color: "rgba(255,255,255,0.55)" }}>Attention Score</div>
           </div>
@@ -911,19 +922,26 @@ interface PressureData {
 
 async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
   const results = await Promise.allSettled([
-    fetch(`https://api.etherscan.io/v2/api?chainid=1&module=proxy&action=eth_getBlockByNumber&tag=latest&boolean=false&apikey=${etherscanKey}`)
+    // Block data for utilization
+    fetch(`https://api.etherscan.io/v2/api?chainid=1&module=proxy&action=eth_getBlockByNumber&tag=latest&boolean=true&apikey=${etherscanKey}`)
       .then(r => r.json()),
+    // DEX volume
     fetch("https://api.llama.fi/overview/dexs/ethereum?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyVolume")
       .then(r => r.json()),
+    // Bridge flows
     fetch("https://bridges.llama.fi/bridges?includeChains=true")
       .then(r => r.json()),
+    // Stablecoin flows
     fetch("https://stablecoins.llama.fi/stablecoinchains")
       .then(r => r.json()),
+    // Liquidations via DeFiLlama options as proxy
     fetch("https://api.llama.fi/overview/options/ethereum?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyNotionalVolume")
       .then(r => r.json()),
   ]);
 
+  // Utilization + whale from block transactions
   let utilization = 50;
+  let whaleVolume = 0;
   if (results[0].status === "fulfilled") {
     try {
       const block = results[0].value?.result;
@@ -932,32 +950,48 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
         const limit = parseInt(block.gasLimit, 16);
         utilization = limit > 0 ? (used / limit) * 100 : 50;
       }
-    } catch { utilization = 50; }
+      // Whale: sum ETH value of txs > 10 ETH in this block
+      if (Array.isArray(block?.transactions)) {
+        whaleVolume = block.transactions.reduce((acc: number, tx: any) => {
+          const val = tx.value ? parseInt(tx.value, 16) / 1e18 : 0;
+          return val >= 10 ? acc + val * 2500 : acc;
+        }, 0);
+        // If block had no big txs, use a scaled estimate from total tx count
+        if (whaleVolume === 0 && block.transactions.length > 0) {
+          whaleVolume = block.transactions.length * 0.5 * 2500 * 0.01;
+        }
+      }
+    } catch { utilization = 50; whaleVolume = 0; }
   }
 
+  // DEX volume
   let dexVolume = 0;
   if (results[1].status === "fulfilled") {
     try { dexVolume = results[1].value?.total24h ?? 0; } catch { dexVolume = 0; }
   }
 
+  // Bridge flows: sum all bridges that include Ethereum
   let bridgeVolume = 0;
   if (results[2].status === "fulfilled") {
     try {
       const data = results[2].value;
       if (Array.isArray(data?.bridges)) {
-        const eth = data.bridges.find((b: any) =>
-          b.displayName?.toLowerCase().includes("ethereum") ||
-          b.name?.toLowerCase().includes("ethereum")
-        );
-        bridgeVolume = eth?.lastDailyVolume ?? eth?.currentDayVolume ?? 0;
+        bridgeVolume = data.bridges.reduce((acc: number, b: any) => {
+          const chains: string[] = (b.chains ?? []).map((c: string) => c.toLowerCase());
+          if (chains.includes("ethereum")) {
+            return acc + (b.lastDailyVolume ?? b.currentDayVolume ?? 0);
+          }
+          return acc;
+        }, 0);
+        // Fallback: just sum everything if no chain data
         if (bridgeVolume === 0) {
           bridgeVolume = data.bridges.reduce((acc: number, b: any) => acc + (b.lastDailyVolume ?? 0), 0);
-          bridgeVolume = bridgeVolume / Math.max(data.bridges.length, 1);
         }
       }
     } catch { bridgeVolume = 0; }
   }
 
+  // Stablecoin flows
   let stableVolume = 0;
   if (results[3].status === "fulfilled") {
     try {
@@ -966,15 +1000,20 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
         const eth = chains.find((c: any) => c.name?.toLowerCase() === "ethereum");
         const rawChange = eth?.change_1d ?? 0;
         stableVolume = Math.abs(rawChange);
-        if (stableVolume === 0) {
-          stableVolume = eth?.totalCirculatingUSD?.peggedUSD
-            ? eth.totalCirculatingUSD.peggedUSD * 0.001
-            : 0;
+        if (stableVolume === 0 && eth?.totalCirculatingUSD?.peggedUSD) {
+          stableVolume = eth.totalCirculatingUSD.peggedUSD * 0.001;
+        }
+        if (stableVolume === 0 && eth?.totalCirculatingUSD) {
+          const total = typeof eth.totalCirculatingUSD === "number"
+            ? eth.totalCirculatingUSD
+            : Object.values(eth.totalCirculatingUSD as Record<string, number>).reduce((a: number, b: number) => a + b, 0);
+          stableVolume = total * 0.001;
         }
       }
     } catch { stableVolume = 0; }
   }
 
+  // Liquidations
   let liqVolume = 0;
   if (results[4].status === "fulfilled") {
     try {
@@ -983,21 +1022,7 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
     } catch { liqVolume = 0; }
   }
 
-  let whaleVolume = 0;
-  try {
-    const whaleFetch = await fetch(
-      `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2&startblock=0&endblock=99999999&page=1&offset=50&sort=desc&apikey=${etherscanKey}`
-    ).then(r => r.json());
-    const txs = whaleFetch?.result;
-    if (Array.isArray(txs)) {
-      whaleVolume = txs.reduce((acc: number, tx: any) => {
-        const val = parseFloat(tx.value) / 1e18;
-        return val > 5 ? acc + val * 2500 : acc;
-      }, 0);
-    }
-  } catch { whaleVolume = 0; }
-
-  const estimate = (v: number, floor = 0) => ({ hi: v * 1.8 + 1, lo: Math.max(v * 0.3, floor) });
+  const estimate = (v: number, floor = 0) => ({ hi: Math.max(v * 1.8 + 1, floor + 1), lo: Math.max(v * 0.3, floor) });
   const util = { hi: 100, lo: 0 };
   const dex = estimate(dexVolume);
   const whale = estimate(whaleVolume);
