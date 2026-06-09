@@ -12,7 +12,7 @@ import {
   Diamond,
   Gauge,
   CurrencyDollar,
-  Whale,
+  Fish,
   ArrowsHorizontal,
   Coin,
   Drop,
@@ -633,7 +633,7 @@ function ScoreBreakdown({
     { label: "Addr", weight: 0.10, state: addrState },
     { label: "Util", weight: 0.15, state: utilState },
     { label: "DEX", weight: 0.10, state: dexState },
-    { label: "Whale", weight: 0.10, state: whaleState },
+    { label: "Fish", weight: 0.10, state: whaleState },
     { label: "Bridge", weight: 0.05, state: bridgeState },
     { label: "Stable", weight: 0.05, state: stableState },
     { label: "Liq", weight: 0.05, state: liqState },
@@ -645,7 +645,7 @@ function ScoreBreakdown({
     { label: "Active Addresses", key: "ACTIVE_ADDRESSES", weight: "10%", state: addrState, value: addrValue > 0 ? Math.round(addrValue).toLocaleString() : "Loading", icon: <Users size={18} weight="duotone" /> },
     { label: "Network Utilization", key: "NET_UTILIZATION", weight: "15%", state: utilState, value: utilValue > 0 ? `${utilValue.toFixed(1)}%` : "Loading", icon: <Gauge size={18} weight="duotone" /> },
     { label: "DEX Volume 24h", key: "DEX_VOLUME", weight: "10%", state: dexState, value: dexValue > 0 ? formatValue("DEX_VOLUME", dexValue) : "Loading", icon: <CurrencyDollar size={18} weight="duotone" /> },
-    { label: "Whale Transactions", key: "WHALE_TXNS", weight: "10%", state: whaleState, value: whaleValue > 0 ? formatValue("WHALE_TXNS", whaleValue) : "Loading", icon: <Whale size={18} weight="duotone" /> },
+    { label: "Fish Transactions", key: "WHALE_TXNS", weight: "10%", state: whaleState, value: whaleValue > 0 ? formatValue("WHALE_TXNS", whaleValue) : "Loading", icon: <Fish size={18} weight="duotone" /> },
     { label: "Bridge Flows", key: "BRIDGE_FLOWS", weight: "5%", state: bridgeState, value: bridgeValue > 0 ? formatValue("BRIDGE_FLOWS", bridgeValue) : "Loading", icon: <ArrowsHorizontal size={18} weight="duotone" /> },
     { label: "Stablecoin Flows", key: "STABLECOIN_FLOWS", weight: "5%", state: stableState, value: stableValue > 0 ? formatValue("STABLECOIN_FLOWS", stableValue) : "Loading", icon: <Coin size={18} weight="duotone" /> },
     { label: "Liquidations", key: "LIQUIDATIONS", weight: "5%", state: liqState, value: liqValue > 0 ? formatValue("LIQUIDATIONS", liqValue) : "Loading", icon: <Drop size={18} weight="duotone" /> },
@@ -811,7 +811,7 @@ function FeedRow({
     ACTIVE_ADDRESSES: <Users size={20} weight="duotone" />,
     NET_UTILIZATION: <Gauge size={20} weight="duotone" />,
     DEX_VOLUME: <CurrencyDollar size={20} weight="duotone" />,
-    WHALE_TXNS: <Whale size={20} weight="duotone" />,
+    WHALE_TXNS: <Fish size={20} weight="duotone" />,
     BRIDGE_FLOWS: <ArrowsHorizontal size={20} weight="duotone" />,
     STABLECOIN_FLOWS: <Coin size={20} weight="duotone" />,
     LIQUIDATIONS: <Drop size={20} weight="duotone" />,
@@ -1093,7 +1093,7 @@ function FeedPage() {
         <div className="flex flex-col gap-4">
           <FeedRow label="Network Utilization" unit="capacity" value={pressure.utilization} metricKey="NET_UTILIZATION" dailyHigh={pressure.utilizationHigh} dailyLow={pressure.utilizationLow} />
           <FeedRow label="DEX Volume 24h" unit="usd" value={pressure.dexVolume} metricKey="DEX_VOLUME" dailyHigh={pressure.dexHigh} dailyLow={pressure.dexLow} />
-          <FeedRow label="Whale Transactions" unit="usd" value={pressure.whaleVolume} metricKey="WHALE_TXNS" dailyHigh={pressure.whaleHigh} dailyLow={pressure.whaleLow} />
+          <FeedRow label="Fish Transactions" unit="usd" value={pressure.whaleVolume} metricKey="WHALE_TXNS" dailyHigh={pressure.whaleHigh} dailyLow={pressure.whaleLow} />
           <FeedRow label="Bridge Flows" unit="usd" value={pressure.bridgeVolume} metricKey="BRIDGE_FLOWS" dailyHigh={pressure.bridgeHigh} dailyLow={pressure.bridgeLow} />
           <FeedRow label="Stablecoin Flows" unit="usd" value={pressure.stableVolume} metricKey="STABLECOIN_FLOWS" dailyHigh={pressure.stableHigh} dailyLow={pressure.stableLow} />
           <FeedRow label="Liquidations" unit="usd" value={pressure.liqVolume} metricKey="LIQUIDATIONS" dailyHigh={pressure.liqHigh} dailyLow={pressure.liqLow} />
