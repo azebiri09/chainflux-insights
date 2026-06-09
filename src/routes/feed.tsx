@@ -958,7 +958,7 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
         }, 0);
         // If block had no big txs, use a scaled estimate from total tx count
         if (whaleVolume === 0 && block.transactions.length > 0) {
-          whaleVolume = block.transactions.length * 0.5 * 2500 * 0.01;
+          whaleVolume = 1;
         }
       }
     } catch { utilization = 50; whaleVolume = 0; }
