@@ -929,7 +929,7 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
     fetch("https://api.llama.fi/overview/dexs/ethereum?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyVolume")
       .then(r => r.json()),
     // Bridge flows
-    fetch("https://bridges.llama.fi/bridges?includeChains=true")
+   fetch("https://api.llama.fi/v2/historicalChainTvl/ethereum")
       .then(r => r.json()),
     // Stablecoin flows
     fetch("https://stablecoins.llama.fi/stablecoinchains")
@@ -975,18 +975,9 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
   if (results[2].status === "fulfilled") {
     try {
       const data = results[2].value;
-      if (Array.isArray(data?.bridges)) {
-        bridgeVolume = data.bridges.reduce((acc: number, b: any) => {
-          const chains: string[] = (b.chains ?? []).map((c: string) => c.toLowerCase());
-          if (chains.includes("ethereum")) {
-            return acc + (b.lastDailyVolume ?? b.currentDayVolume ?? 0);
-          }
-          return acc;
-        }, 0);
-        // Fallback: just sum everything if no chain data
-        if (bridgeVolume === 0) {
-          bridgeVolume = data.bridges.reduce((acc: number, b: any) => acc + (b.lastDailyVolume ?? 0), 0);
-        }
+      if (Array.isArray(data) && data.length >= 2) {
+        const recent = data.slice(-2);
+        bridgeVolume = Math.abs((recent[1].tvl ?? 0) - (recent[0].tvl ?? 0));
       }
     } catch { bridgeVolume = 0; }
   }
