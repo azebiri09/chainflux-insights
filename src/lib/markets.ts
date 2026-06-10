@@ -30,8 +30,6 @@ export function getMetricState(metric: string, value: number): MetricState {
   return "medium";
 }
 
-// ─── PERSISTENCE ──────────────────────────────────────────────────────────────
-
 const MAX_TICKS = 7200;
 const STORAGE_KEY = (m: Market) => `chainflux_history_${m}`;
 
@@ -50,12 +48,8 @@ function loadHistory(m: Market): number[] {
 function saveHistory(m: Market, history: number[]) {
   try {
     localStorage.setItem(STORAGE_KEY(m), JSON.stringify(history.slice(-MAX_TICKS)));
-  } catch {
-    // storage full — ignore
-  }
+  } catch {}
 }
-
-// ─── PERPS ────────────────────────────────────────────────────────────────────
 
 type PerpsState = {
   history: Record<Market, number[]>;
@@ -129,8 +123,6 @@ export function getCurrent(m: Market) {
   return h[h.length - 1] ?? 0;
 }
 
-// ─── FEED ─────────────────────────────────────────────────────────────────────
-
 export type FeedData = {
   GAS: number;
   GAS_DAILY_HIGH: number;
@@ -141,6 +133,7 @@ export type FeedData = {
   ACTIVE_ADDRESSES: number;
   ACTIVE_DAILY_HIGH: number;
   ACTIVE_DAILY_LOW: number;
+  TVL_CHANGE: number;
   updatedAt: number;
 };
 
@@ -154,6 +147,7 @@ const EMPTY_FEED: FeedData = {
   ACTIVE_ADDRESSES: 0,
   ACTIVE_DAILY_HIGH: 0,
   ACTIVE_DAILY_LOW: 0,
+  TVL_CHANGE: 0,
   updatedAt: 0,
 };
 
@@ -188,4 +182,4 @@ export function useNetworkFeed(): FeedData {
     return () => { feedListeners.delete(fn); };
   }, []);
   return { ...feedState };
-          }
+}
