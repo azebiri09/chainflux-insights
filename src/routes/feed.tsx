@@ -366,9 +366,7 @@ function computeAttentionScore(signals: {
     norm(s.util, s.utilLow, s.utilHigh) * 0.15 +
     norm(s.dex, s.dexLow, s.dexHigh) * 0.10 +
     norm(s.tvl, s.tvlLow, s.tvlHigh) * 0.10 +
-    norm(s.bridge, s.bridgeLow, s.bridgeHigh) * 0.05 +
-    norm(s.stable, s.stableLow, s.stableHigh) * 0.05 +
-    norm(s.liq, s.liqLow, s.liqHigh) * 0.05
+    norm(s.liq, s.liqLow, s.liqHigh) * 0.10
   );
 }
 
@@ -624,7 +622,7 @@ function ScoreBreakdown({
   utilState: "low" | "medium" | "high"; utilValue: number;
   dexState: "low" | "medium" | "high"; dexValue: number;
   tvlState: "low" | "medium" | "high"; tvlValue: number;
-  bridgeState: "low" | "medium" | "high"; bridgeValue: number;
+  
   stableState: "low" | "medium" | "high"; stableValue: number;
   liqState: "low" | "medium" | "high"; liqValue: number;
   score: number;
@@ -647,9 +645,8 @@ function ScoreBreakdown({
     { label: "Util", weight: 0.15, state: utilState },
     { label: "DEX", weight: 0.10, state: dexState },
     { label: "TVL", weight: 0.10, state: tvlState },
-    { label: "Bridge", weight: 0.05, state: bridgeState },
     { label: "Stable", weight: 0.05, state: stableState },
-    { label: "Liq", weight: 0.05, state: liqState },
+    { label: "Liq", weight: 0.10, state: liqState },
   ];
 
   const rows = [
@@ -659,9 +656,8 @@ function ScoreBreakdown({
     { label: "Network Utilization", key: "NET_UTILIZATION", weight: "15%", state: utilState, value: utilValue > 0 ? `${utilValue.toFixed(1)}%` : "Loading", icon: <Gauge size={18} weight="duotone" /> },
     { label: "DEX Volume 24h", key: "DEX_VOLUME", weight: "10%", state: dexState, value: dexValue > 0 ? formatValue("DEX_VOLUME", dexValue) : "Loading", icon: <CurrencyDollar size={18} weight="duotone" /> },
     { label: "DeFi TVL Change 24h", key: "TVL_CHANGE", weight: "10%", state: tvlState, value: tvlValue > 0 ? formatValue("TVL_CHANGE", tvlValue) : "Loading", icon: <ChartLineUp size={18} weight="duotone" /> },
-    { label: "Bridge Flows", key: "BRIDGE_FLOWS", weight: "5%", state: bridgeState, value: bridgeValue > 0 ? formatValue("BRIDGE_FLOWS", bridgeValue) : "Loading", icon: <ArrowsHorizontal size={18} weight="duotone" /> },
     { label: "Stablecoin Flows", key: "STABLECOIN_FLOWS", weight: "5%", state: stableState, value: stableValue > 0 ? formatValue("STABLECOIN_FLOWS", stableValue) : "Loading", icon: <Coin size={18} weight="duotone" /> },
-    { label: "Liquidations", key: "LIQUIDATIONS", weight: "5%", state: liqState, value: liqValue > 0 ? formatValue("LIQUIDATIONS", liqValue) : "Loading", icon: <Drop size={18} weight="duotone" /> },
+    { label: "Liquidations", key: "LIQUIDATIONS", weight: "10%", state: liqState, value: liqValue > 0 ? formatValue("LIQUIDATIONS", liqValue) : "Loading", icon: <Drop size={18} weight="duotone" /> },
   ];
 
   return (
@@ -731,7 +727,6 @@ function AttentionScoreCard({
   utilState: "low" | "medium" | "high"; utilValue: number;
   dexState: "low" | "medium" | "high"; dexValue: number;
   tvlState: "low" | "medium" | "high"; tvlValue: number;
-  bridgeState: "low" | "medium" | "high"; bridgeValue: number;
   stableState: "low" | "medium" | "high"; stableValue: number;
   liqState: "low" | "medium" | "high"; liqValue: number;
 }) {
@@ -805,7 +800,6 @@ function AttentionScoreCard({
           utilState={utilState} utilValue={utilValue}
           dexState={dexState} dexValue={dexValue}
           tvlState={tvlState} tvlValue={tvlValue}
-          bridgeState={bridgeState} bridgeValue={bridgeValue}
           stableState={stableState} stableValue={stableValue}
           liqState={liqState} liqValue={liqValue}
         />
@@ -839,7 +833,6 @@ function FeedRow({
     NET_UTILIZATION: <Gauge size={20} weight="duotone" />,
     DEX_VOLUME: <CurrencyDollar size={20} weight="duotone" />,
     TVL_CHANGE: <ChartLineUp size={20} weight="duotone" />,
-    BRIDGE_FLOWS: <ArrowsHorizontal size={20} weight="duotone" />,
     STABLECOIN_FLOWS: <Coin size={20} weight="duotone" />,
     LIQUIDATIONS: <Drop size={20} weight="duotone" />,
   };
@@ -1115,7 +1108,6 @@ function FeedPage() {
           <FeedRow label="Network Utilization" unit="capacity" value={pressure.utilization} metricKey="NET_UTILIZATION" dailyHigh={pressure.utilizationHigh} dailyLow={pressure.utilizationLow} />
           <FeedRow label="DEX Volume 24h" unit="usd" value={pressure.dexVolume} metricKey="DEX_VOLUME" dailyHigh={pressure.dexHigh} dailyLow={pressure.dexLow} />
           <FeedRow label="DeFi TVL Change 24h" unit="usd" value={feed.TVL_CHANGE ?? 0} metricKey="TVL_CHANGE" dailyHigh={Math.max((feed.TVL_CHANGE ?? 0) * 2, 1)} dailyLow={0} />
-          <FeedRow label="Bridge Flows" unit="usd" value={pressure.bridgeVolume} metricKey="BRIDGE_FLOWS" dailyHigh={pressure.bridgeHigh} dailyLow={pressure.bridgeLow} />
           <FeedRow label="Stablecoin Flows" unit="usd" value={pressure.stableVolume} metricKey="STABLECOIN_FLOWS" dailyHigh={pressure.stableHigh} dailyLow={pressure.stableLow} />
           <FeedRow label="Liquidations" unit="usd" value={pressure.liqVolume} metricKey="LIQUIDATIONS" dailyHigh={pressure.liqHigh} dailyLow={pressure.liqLow} />
         </div>
