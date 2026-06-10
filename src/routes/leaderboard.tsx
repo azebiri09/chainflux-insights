@@ -120,7 +120,7 @@ function LeaderboardPage() {
           )}
 
           {error && (
-            <div className="p-8 text-sm text-red-400/70">{error}</div>
+            <div className="p-8 text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>Unable to load leaderboard data. Please try again.</div>
           )}
 
           {!loading && !error && rows.length === 0 && (
