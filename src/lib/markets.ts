@@ -134,6 +134,16 @@ export type FeedData = {
   ACTIVE_DAILY_HIGH: number;
   ACTIVE_DAILY_LOW: number;
   TVL_CHANGE: number;
+  NET_UTILIZATION: number;
+  DEX_VOLUME: number;
+  DEX_VOLUME_HIGH: number;
+  DEX_VOLUME_LOW: number;
+  STABLECOIN_FLOWS: number;
+  STABLECOIN_HIGH: number;
+  STABLECOIN_LOW: number;
+  LIQUIDATIONS: number;
+  LIQUIDATIONS_HIGH: number;
+  LIQUIDATIONS_LOW: number;
   updatedAt: number;
 };
 
@@ -148,6 +158,16 @@ const EMPTY_FEED: FeedData = {
   ACTIVE_DAILY_HIGH: 0,
   ACTIVE_DAILY_LOW: 0,
   TVL_CHANGE: 0,
+  NET_UTILIZATION: 0,
+  DEX_VOLUME: 0,
+  DEX_VOLUME_HIGH: 1,
+  DEX_VOLUME_LOW: 0,
+  STABLECOIN_FLOWS: 0,
+  STABLECOIN_HIGH: 1,
+  STABLECOIN_LOW: 0,
+  LIQUIDATIONS: 0,
+  LIQUIDATIONS_HIGH: 1,
+  LIQUIDATIONS_LOW: 0,
   updatedAt: 0,
 };
 
@@ -182,4 +202,4 @@ export function useNetworkFeed(): FeedData {
     return () => { feedListeners.delete(fn); };
   }, []);
   return { ...feedState };
-}
+  }
