@@ -727,6 +727,7 @@ function AttentionScoreCard({
   utilState: "low" | "medium" | "high"; utilValue: number;
   dexState: "low" | "medium" | "high"; dexValue: number;
   tvlState: "low" | "medium" | "high"; tvlValue: number;
+  bridgeState: "low" | "medium" | "high"; bridgeValue: number;
   stableState: "low" | "medium" | "high"; stableValue: number;
   liqState: "low" | "medium" | "high"; liqValue: number;
 }) {
