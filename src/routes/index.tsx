@@ -33,7 +33,7 @@ function short(a: string) {
 }
 
 async function fetchTopTraders(): Promise<LeaderRow[]> {
-  const provider = new ethers.JsonRpcProvider(`${import.meta.env.VITE_ALCHEMY_RPC_URL}`);
+  const provider = new ethers.JsonRpcProvider("https://arb-sepolia.g.alchemy.com/v2/6d-NCac8fCgKkqyBEC12f");
   const contract = new ethers.Contract(PROXY_ADDRESS, CHAINFLUX_ABI, provider);
   const latestBlock = await provider.getBlockNumber();
   const CHUNK = 50000;

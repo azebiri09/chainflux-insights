@@ -622,7 +622,7 @@ function ScoreBreakdown({
   utilState: "low" | "medium" | "high"; utilValue: number;
   dexState: "low" | "medium" | "high"; dexValue: number;
   tvlState: "low" | "medium" | "high"; tvlValue: number;
-  
+  bridgeState: "low" | "medium" | "high"; bridgeValue: number;
   stableState: "low" | "medium" | "high"; stableValue: number;
   liqState: "low" | "medium" | "high"; liqValue: number;
   score: number;
@@ -727,6 +727,7 @@ function AttentionScoreCard({
   utilState: "low" | "medium" | "high"; utilValue: number;
   dexState: "low" | "medium" | "high"; dexValue: number;
   tvlState: "low" | "medium" | "high"; tvlValue: number;
+  bridgeState: "low" | "medium" | "high"; bridgeValue: number;
   stableState: "low" | "medium" | "high"; stableValue: number;
   liqState: "low" | "medium" | "high"; liqValue: number;
 }) {
@@ -800,6 +801,7 @@ function AttentionScoreCard({
           utilState={utilState} utilValue={utilValue}
           dexState={dexState} dexValue={dexValue}
           tvlState={tvlState} tvlValue={tvlValue}
+          bridgeState={bridgeState} bridgeValue={bridgeValue}
           stableState={stableState} stableValue={stableValue}
           liqState={liqState} liqValue={liqValue}
         />
