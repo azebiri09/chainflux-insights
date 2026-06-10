@@ -67,7 +67,7 @@ async function fetchTierInfo(address: string): Promise<TierInfo> {
 }
 
 async function fetchClosedTradesForWallet(wallet: string): Promise<ClosedTrade[]> {
-  const provider = new ethers.JsonRpcProvider("https://sepolia-rollup.arbitrum.io/rpc");
+  const provider = new ethers.JsonRpcProvider("https://arb-sepolia.g.alchemy.com/v2/6d-NCac8fCgKkqyBEC12f");
   const contract = new ethers.Contract(PROXY_ADDRESS, CHAINFLUX_ABI, provider);
   const latestBlock = await provider.getBlockNumber();
   const CHUNK = 50000;
