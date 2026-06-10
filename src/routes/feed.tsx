@@ -12,7 +12,6 @@ import {
   Diamond,
   Gauge,
   CurrencyDollar,
-  ArrowsHorizontal,
   Coin,
   Drop,
   ChartLineUp,
@@ -164,26 +163,6 @@ const EXPLANATIONS: Record<string, Record<"low" | "medium" | "high", Explanation
       action: "Important signal. Large TVL shifts often precede broader market moves and trend formation.",
     },
   },
-  BRIDGE_FLOWS: {
-    low: {
-      happening: "Minimal capital is moving across chains.",
-      why: "Users are not actively bridging assets into or out of Ethereum.",
-      means: "Capital is staying within existing ecosystems with no strong rotation pressure.",
-      action: "Cross-chain demand is weak. No directional signal from external capital flows.",
-    },
-    medium: {
-      happening: "Bridge activity is at a normal level.",
-      why: "Routine capital movement between chains continues steadily without acceleration.",
-      means: "Balanced cross-chain liquidity with no strong migration trend in either direction.",
-      action: "No directional signal in capital flow. Monitor for a shift toward elevated inflows.",
-    },
-    high: {
-      happening: "Large volumes of assets are moving across bridges.",
-      why: "Capital is rotating between ecosystems due to yield opportunities, sentiment shifts, or major events.",
-      means: "Strong cross-chain repositioning of liquidity. Ethereum is either gaining or losing capital at scale.",
-      action: "Important macro signal. Often aligns with broader market rotations and trend formation.",
-    },
-  },
   STABLECOIN_FLOWS: {
     low: {
       happening: "Stablecoin supply is largely unchanged.",
@@ -278,14 +257,13 @@ function computeMarketPhase(
   txsState: "low" | "medium" | "high",
   addrState: "low" | "medium" | "high",
   dexState: "low" | "medium" | "high",
-  bridgeState: "low" | "medium" | "high",
   stableState: "low" | "medium" | "high",
   liqState: "low" | "medium" | "high",
   tvlState: "low" | "medium" | "high"
 ): MarketPhase {
   const stateScore = (s: "low" | "medium" | "high") => s === "high" ? 2 : s === "medium" ? 1 : 0;
   const demandScore = stateScore(gasState) + stateScore(txsState) + stateScore(addrState);
-  const liquidityScore = stateScore(dexState) + stateScore(bridgeState) + stateScore(stableState) + stateScore(tvlState);
+  const liquidityScore = stateScore(dexState) + stateScore(stableState) + stateScore(tvlState);
   const stressScore = stateScore(liqState);
 
   if (score <= 30) {
@@ -346,10 +324,9 @@ function computeAttentionScore(signals: {
   gas: number; gasHigh: number; gasLow: number;
   txs: number; txsHigh: number; txsLow: number;
   addr: number; addrHigh: number; addrLow: number;
-  util: number; utilHigh: number; utilLow: number;
+  util: number;
   dex: number; dexHigh: number; dexLow: number;
   tvl: number; tvlHigh: number; tvlLow: number;
-  bridge: number; bridgeHigh: number; bridgeLow: number;
   stable: number; stableHigh: number; stableLow: number;
   liq: number; liqHigh: number; liqLow: number;
 }): number {
@@ -363,9 +340,10 @@ function computeAttentionScore(signals: {
     norm(s.gas, s.gasLow, s.gasHigh) * 0.20 +
     norm(s.txs, s.txsLow, s.txsHigh) * 0.20 +
     norm(s.addr, s.addrLow, s.addrHigh) * 0.10 +
-    norm(s.util, s.utilLow, s.utilHigh) * 0.15 +
+    s.util * 0.15 +
     norm(s.dex, s.dexLow, s.dexHigh) * 0.10 +
     norm(s.tvl, s.tvlLow, s.tvlHigh) * 0.10 +
+    norm(s.stable, s.stableLow, s.stableHigh) * 0.05 +
     norm(s.liq, s.liqLow, s.liqHigh) * 0.10
   );
 }
@@ -380,12 +358,18 @@ function getSimpleMetricState(value: number, low: number, high: number): "low" |
   return "high";
 }
 
+function getUtilizationState(value: number): "low" | "medium" | "high" {
+  if (value < 33) return "low";
+  if (value < 67) return "medium";
+  return "high";
+}
+
 function formatValue(metric: string, value: number): string {
   if (value === 0) return "Loading";
   if (metric === "GAS") return value.toFixed(4);
   if (metric === "NET_UTILIZATION") return `${value.toFixed(1)}%`;
   if (
-    metric === "DEX_VOLUME" || metric === "TVL_CHANGE" || metric === "BRIDGE_FLOWS" ||
+    metric === "DEX_VOLUME" || metric === "TVL_CHANGE" ||
     metric === "STABLECOIN_FLOWS" || metric === "LIQUIDATIONS"
   ) {
     if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
@@ -594,11 +578,7 @@ function AnimatedDonut({
           strokeWidth={strokeWidth}
           strokeLinecap="butt"
           strokeDasharray={dashArray}
-          strokeDashoffset={
-            animate
-              ? dashOffset
-              : dashOffset - segLen
-          }
+          strokeDashoffset={animate ? dashOffset : dashOffset - segLen}
           filter={`url(#glow-${seg.label}-${size})`}
           style={{
             transition: animate
@@ -614,15 +594,13 @@ function AnimatedDonut({
 function ScoreBreakdown({
   gasState, txsState, addrState, gasValue, txsValue, addrValue,
   utilState, utilValue, dexState, dexValue, tvlState, tvlValue,
-  bridgeState, bridgeValue, stableState, stableValue, liqState, liqValue,
-  score,
+  stableState, stableValue, liqState, liqValue, score,
 }: {
   gasState: "low" | "medium" | "high"; txsState: "low" | "medium" | "high"; addrState: "low" | "medium" | "high";
   gasValue: number; txsValue: number; addrValue: number;
   utilState: "low" | "medium" | "high"; utilValue: number;
   dexState: "low" | "medium" | "high"; dexValue: number;
   tvlState: "low" | "medium" | "high"; tvlValue: number;
-  bridgeState: "low" | "medium" | "high"; bridgeValue: number;
   stableState: "low" | "medium" | "high"; stableValue: number;
   liqState: "low" | "medium" | "high"; liqValue: number;
   score: number;
@@ -665,7 +643,7 @@ function ScoreBreakdown({
       <div className="flex flex-col items-center mb-8">
         <div className="relative" style={{ width: 240, height: 240 }}>
           <AnimatedDonut segments={segments} animate={animate} size={240} />
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style={{ transform: "rotate(0deg)" }}>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
             <div className="text-5xl font-bold tabular-nums leading-none" style={{ color: info.color }}>{score}</div>
             <div className="text-[9px] tracking-[0.25em] uppercase mt-2" style={{ color: "rgba(255,255,255,0.55)" }}>Attention Score</div>
           </div>
@@ -719,7 +697,7 @@ function ScoreBreakdown({
 function AttentionScoreCard({
   score, gasState, txsState, addrState, gasValue, txsValue, addrValue,
   utilState, utilValue, dexState, dexValue, tvlState, tvlValue,
-  bridgeState, bridgeValue, stableState, stableValue, liqState, liqValue,
+  stableState, stableValue, liqState, liqValue,
 }: {
   score: number;
   gasState: "low" | "medium" | "high"; txsState: "low" | "medium" | "high"; addrState: "low" | "medium" | "high";
@@ -727,14 +705,13 @@ function AttentionScoreCard({
   utilState: "low" | "medium" | "high"; utilValue: number;
   dexState: "low" | "medium" | "high"; dexValue: number;
   tvlState: "low" | "medium" | "high"; tvlValue: number;
-  bridgeState: "low" | "medium" | "high"; bridgeValue: number;
   stableState: "low" | "medium" | "high"; stableValue: number;
   liqState: "low" | "medium" | "high"; liqValue: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const level = getAttentionLevel(score);
   const info = ATTENTION_LABELS[level];
-  const phase = computeMarketPhase(score, gasState, txsState, addrState, dexState, bridgeState, stableState, liqState, tvlState);
+  const phase = computeMarketPhase(score, gasState, txsState, addrState, dexState, stableState, liqState, tvlState);
   const circumference = 2 * Math.PI * 54;
   const filled = (score / 100) * circumference;
 
@@ -801,7 +778,6 @@ function AttentionScoreCard({
           utilState={utilState} utilValue={utilValue}
           dexState={dexState} dexValue={dexValue}
           tvlState={tvlState} tvlValue={tvlValue}
-          bridgeState={bridgeState} bridgeValue={bridgeValue}
           stableState={stableState} stableValue={stableValue}
           liqState={liqState} liqValue={liqValue}
         />
@@ -819,13 +795,15 @@ function FeedRow({
   const [open, setOpen] = useState(false);
   const state = metricKey === "GAS" || metricKey === "TXS_PER_BLOCK" || metricKey === "ACTIVE_ADDRESSES"
     ? getMetricState(metricKey, value)
+    : metricKey === "NET_UTILIZATION"
+    ? getUtilizationState(value)
     : getSimpleMetricState(value, dailyLow ?? 0, dailyHigh ?? 0);
   const c = STATE_COLORS[state];
   const explanation = EXPLANATIONS[metricKey]?.[state];
   const history = useRollingValues(value);
 
   const range = (dailyHigh ?? 0) - (dailyLow ?? 0);
-  const position = range > 0 ? ((value - (dailyLow ?? 0)) / range) * 100 : 50;
+  const position = range > 0 ? ((value - (dailyLow ?? 0)) / range) * 100 : metricKey === "NET_UTILIZATION" ? value : 50;
   const clampedPosition = Math.min(100, Math.max(2, position));
 
   const metricIcon: Record<string, React.ReactNode> = {
@@ -858,7 +836,7 @@ function FeedRow({
             <div className="text-white font-bold text-base tracking-tight truncate">{label}</div>
             {tradeable && <TradeableBadge />}
           </div>
-          {(dailyHigh ?? 0) > 0 && (
+          {((dailyHigh ?? 0) > 0 || metricKey === "NET_UTILIZATION") && (
             <div className="flex items-center gap-2">
               <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.10)" }}>
                 <div className="h-full rounded-full transition-all duration-700" style={{ width: `${clampedPosition}%`, background: `linear-gradient(90deg, #818cf8, ${c.bar})` }} />
@@ -867,8 +845,8 @@ function FeedRow({
                 {metricKey === "GAS"
                   ? `${(dailyLow ?? 0).toFixed(2)} / ${(dailyHigh ?? 0).toFixed(2)}`
                   : metricKey === "NET_UTILIZATION"
-                  ? `${(dailyLow ?? 0).toFixed(1)}% / ${(dailyHigh ?? 0).toFixed(1)}%`
-                  : metricKey === "DEX_VOLUME" || metricKey === "TVL_CHANGE" || metricKey === "BRIDGE_FLOWS" || metricKey === "STABLECOIN_FLOWS" || metricKey === "LIQUIDATIONS"
+                  ? `0% / 100%`
+                  : metricKey === "DEX_VOLUME" || metricKey === "TVL_CHANGE" || metricKey === "STABLECOIN_FLOWS" || metricKey === "LIQUIDATIONS"
                   ? `${formatValue(metricKey, dailyLow ?? 0)} / ${formatValue(metricKey, dailyHigh ?? 0)}`
                   : `${Math.round(dailyLow ?? 0).toLocaleString()} / ${Math.round(dailyHigh ?? 0).toLocaleString()}`}
               </span>
@@ -906,148 +884,29 @@ function FeedRow({
   );
 }
 
-interface PressureData {
-  utilization: number; utilizationHigh: number; utilizationLow: number;
-  dexVolume: number; dexHigh: number; dexLow: number;
-  bridgeVolume: number; bridgeHigh: number; bridgeLow: number;
-  stableVolume: number; stableHigh: number; stableLow: number;
-  liqVolume: number; liqHigh: number; liqLow: number;
-}
-
-async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
-  const results = await Promise.allSettled([
-    fetch(`https://api.etherscan.io/v2/api?chainid=1&module=proxy&action=eth_getBlockByNumber&tag=latest&boolean=true&apikey=${etherscanKey}`)
-      .then(r => r.json()),
-    fetch("https://api.llama.fi/overview/dexs/ethereum?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyVolume")
-      .then(r => r.json()),
-    fetch("https://api.llama.fi/v2/historicalChainTvl/ethereum")
-      .then(r => r.json()),
-    fetch("https://stablecoins.llama.fi/stablecoinchains")
-      .then(r => r.json()),
-    fetch("https://api.llama.fi/overview/options/ethereum?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyNotionalVolume")
-      .then(r => r.json()),
-  ]);
-
-  let utilization = 50;
-  if (results[0].status === "fulfilled") {
-    try {
-      const block = results[0].value?.result;
-      if (block?.gasUsed && block?.gasLimit) {
-        const used = parseInt(block.gasUsed, 16);
-        const limit = parseInt(block.gasLimit, 16);
-        utilization = limit > 0 ? (used / limit) * 100 : 50;
-      }
-    } catch { utilization = 50; }
-  }
-
-  let dexVolume = 0;
-  if (results[1].status === "fulfilled") {
-    try { dexVolume = results[1].value?.total24h ?? 0; } catch { dexVolume = 0; }
-  }
-
-  let bridgeVolume = 0;
-  if (results[2].status === "fulfilled") {
-    try {
-      const data = results[2].value;
-      if (Array.isArray(data) && data.length >= 2) {
-        const recent = data.slice(-2);
-        bridgeVolume = Math.abs((recent[1].tvl ?? 0) - (recent[0].tvl ?? 0));
-      }
-    } catch { bridgeVolume = 0; }
-  }
-
-  let stableVolume = 0;
-  if (results[3].status === "fulfilled") {
-    try {
-      const chains = results[3].value;
-      if (Array.isArray(chains)) {
-        const eth = chains.find((c: any) => c.name?.toLowerCase() === "ethereum");
-        const rawChange = eth?.change_1d ?? 0;
-        stableVolume = Math.abs(rawChange);
-        if (stableVolume === 0 && eth?.totalCirculatingUSD?.peggedUSD) {
-          stableVolume = eth.totalCirculatingUSD.peggedUSD * 0.001;
-        }
-        if (stableVolume === 0 && eth?.totalCirculatingUSD) {
-          const total = typeof eth.totalCirculatingUSD === "number"
-            ? eth.totalCirculatingUSD
-            : Object.values(eth.totalCirculatingUSD as Record<string, number>).reduce((a: number, b: number) => a + b, 0);
-          stableVolume = total * 0.001;
-        }
-      }
-    } catch { stableVolume = 0; }
-  }
-
-  let liqVolume = 0;
-  if (results[4].status === "fulfilled") {
-    try {
-      const data = results[4].value;
-      liqVolume = data?.total24h ?? data?.totalNotionalVolume24h ?? 0;
-    } catch { liqVolume = 0; }
-  }
-
-  const estimate = (v: number, floor = 0) => ({ hi: Math.max(v * 1.8 + 1, floor + 1), lo: Math.max(v * 0.3, floor) });
-  const util = { hi: 100, lo: 0 };
-  const dex = estimate(dexVolume);
-  const bridge = estimate(bridgeVolume);
-  const stable = estimate(stableVolume);
-  const liq = estimate(liqVolume);
-
-  return {
-    utilization, utilizationHigh: util.hi, utilizationLow: util.lo,
-    dexVolume, dexHigh: dex.hi, dexLow: dex.lo,
-    bridgeVolume, bridgeHigh: bridge.hi, bridgeLow: bridge.lo,
-    stableVolume, stableHigh: stable.hi, stableLow: stable.lo,
-    liqVolume, liqHigh: liq.hi, liqLow: liq.lo,
-  };
-}
-
-const ETHERSCAN_KEY = import.meta.env.ETHERSCAN_API_KEY ?? "";
-
-function usePressureData() {
-  const [data, setData] = useState<PressureData>({
-    utilization: 0, utilizationHigh: 100, utilizationLow: 0,
-    dexVolume: 0, dexHigh: 1, dexLow: 0,
-    bridgeVolume: 0, bridgeHigh: 1, bridgeLow: 0,
-    stableVolume: 0, stableHigh: 1, stableLow: 0,
-    liqVolume: 0, liqHigh: 1, liqLow: 0,
-  });
-
-  useEffect(() => {
-    const load = () => fetchPressureData(ETHERSCAN_KEY).then(setData).catch(() => {});
-    load();
-    const id = setInterval(load, 60000);
-    return () => clearInterval(id);
-  }, []);
-
-  return data;
-}
-
 function FeedPage() {
   const feed = useNetworkFeed();
   const gas = useMarket("GAS");
   const txs = useMarket("TXS_PER_BLOCK");
-  const pressure = usePressureData();
 
   const gasState = getMetricState("GAS", gas.current);
   const txsState = getMetricState("TXS_PER_BLOCK", txs.current);
   const addrState = getMetricState("ACTIVE_ADDRESSES", feed.ACTIVE_ADDRESSES ?? 0);
-  const utilState = getSimpleMetricState(pressure.utilization, pressure.utilizationLow, pressure.utilizationHigh);
-  const dexState = getSimpleMetricState(pressure.dexVolume, pressure.dexLow, pressure.dexHigh);
-  const tvlState = getSimpleMetricState(feed.TVL_CHANGE ?? 0, 0, Math.max(feed.TVL_CHANGE * 2, 1));
-  const bridgeState = getSimpleMetricState(pressure.bridgeVolume, pressure.bridgeLow, pressure.bridgeHigh);
-  const stableState = getSimpleMetricState(pressure.stableVolume, pressure.stableLow, pressure.stableHigh);
-  const liqState = getSimpleMetricState(pressure.liqVolume, pressure.liqLow, pressure.liqHigh);
+  const utilState = getUtilizationState(feed.NET_UTILIZATION ?? 0);
+  const dexState = getSimpleMetricState(feed.DEX_VOLUME ?? 0, feed.DEX_VOLUME_LOW ?? 0, feed.DEX_VOLUME_HIGH ?? 1);
+  const tvlState = getSimpleMetricState(feed.TVL_CHANGE ?? 0, 0, Math.max((feed.TVL_CHANGE ?? 0) * 2, 1));
+  const stableState = getSimpleMetricState(feed.STABLECOIN_FLOWS ?? 0, feed.STABLECOIN_LOW ?? 0, feed.STABLECOIN_HIGH ?? 1);
+  const liqState = getSimpleMetricState(feed.LIQUIDATIONS ?? 0, feed.LIQUIDATIONS_LOW ?? 0, feed.LIQUIDATIONS_HIGH ?? 1);
 
   const attentionScore = computeAttentionScore({
     gas: gas.current, gasHigh: feed.GAS_DAILY_HIGH ?? 0, gasLow: feed.GAS_DAILY_LOW ?? 0,
     txs: txs.current, txsHigh: feed.TXS_DAILY_HIGH ?? 0, txsLow: feed.TXS_DAILY_LOW ?? 0,
     addr: feed.ACTIVE_ADDRESSES ?? 0, addrHigh: feed.ACTIVE_DAILY_HIGH ?? 0, addrLow: feed.ACTIVE_DAILY_LOW ?? 0,
-    util: pressure.utilization, utilHigh: pressure.utilizationHigh, utilLow: pressure.utilizationLow,
-    dex: pressure.dexVolume, dexHigh: pressure.dexHigh, dexLow: pressure.dexLow,
+    util: (feed.NET_UTILIZATION ?? 0) / 100,
+    dex: feed.DEX_VOLUME ?? 0, dexHigh: feed.DEX_VOLUME_HIGH ?? 1, dexLow: feed.DEX_VOLUME_LOW ?? 0,
     tvl: feed.TVL_CHANGE ?? 0, tvlHigh: Math.max((feed.TVL_CHANGE ?? 0) * 2, 1), tvlLow: 0,
-    bridge: pressure.bridgeVolume, bridgeHigh: pressure.bridgeHigh, bridgeLow: pressure.bridgeLow,
-    stable: pressure.stableVolume, stableHigh: pressure.stableHigh, stableLow: pressure.stableLow,
-    liq: pressure.liqVolume, liqHigh: pressure.liqHigh, liqLow: pressure.liqLow,
+    stable: feed.STABLECOIN_FLOWS ?? 0, stableHigh: feed.STABLECOIN_HIGH ?? 1, stableLow: feed.STABLECOIN_LOW ?? 0,
+    liq: feed.LIQUIDATIONS ?? 0, liqHigh: feed.LIQUIDATIONS_HIGH ?? 1, liqLow: feed.LIQUIDATIONS_LOW ?? 0,
   });
 
   return (
@@ -1072,12 +931,11 @@ function FeedPage() {
           score={attentionScore}
           gasState={gasState} txsState={txsState} addrState={addrState}
           gasValue={gas.current} txsValue={txs.current} addrValue={feed.ACTIVE_ADDRESSES ?? 0}
-          utilState={utilState} utilValue={pressure.utilization}
-          dexState={dexState} dexValue={pressure.dexVolume}
+          utilState={utilState} utilValue={feed.NET_UTILIZATION ?? 0}
+          dexState={dexState} dexValue={feed.DEX_VOLUME ?? 0}
           tvlState={tvlState} tvlValue={feed.TVL_CHANGE ?? 0}
-          bridgeState={bridgeState} bridgeValue={pressure.bridgeVolume}
-          stableState={stableState} stableValue={pressure.stableVolume}
-          liqState={liqState} liqValue={pressure.liqVolume}
+          stableState={stableState} stableValue={feed.STABLECOIN_FLOWS ?? 0}
+          liqState={liqState} liqValue={feed.LIQUIDATIONS ?? 0}
         />
 
         <div className="flex items-center gap-4 my-8">
@@ -1107,11 +965,11 @@ function FeedPage() {
         </p>
 
         <div className="flex flex-col gap-4">
-          <FeedRow label="Network Utilization" unit="capacity" value={pressure.utilization} metricKey="NET_UTILIZATION" dailyHigh={pressure.utilizationHigh} dailyLow={pressure.utilizationLow} />
-          <FeedRow label="DEX Volume 24h" unit="usd" value={pressure.dexVolume} metricKey="DEX_VOLUME" dailyHigh={pressure.dexHigh} dailyLow={pressure.dexLow} />
+          <FeedRow label="Network Utilization" unit="capacity" value={feed.NET_UTILIZATION ?? 0} metricKey="NET_UTILIZATION" />
+          <FeedRow label="DEX Volume 24h" unit="usd" value={feed.DEX_VOLUME ?? 0} metricKey="DEX_VOLUME" dailyHigh={feed.DEX_VOLUME_HIGH} dailyLow={feed.DEX_VOLUME_LOW} />
           <FeedRow label="DeFi TVL Change 24h" unit="usd" value={feed.TVL_CHANGE ?? 0} metricKey="TVL_CHANGE" dailyHigh={Math.max((feed.TVL_CHANGE ?? 0) * 2, 1)} dailyLow={0} />
-          <FeedRow label="Stablecoin Flows" unit="usd" value={pressure.stableVolume} metricKey="STABLECOIN_FLOWS" dailyHigh={pressure.stableHigh} dailyLow={pressure.stableLow} />
-          <FeedRow label="Liquidations" unit="usd" value={pressure.liqVolume} metricKey="LIQUIDATIONS" dailyHigh={pressure.liqHigh} dailyLow={pressure.liqLow} />
+          <FeedRow label="Stablecoin Flows" unit="usd" value={feed.STABLECOIN_FLOWS ?? 0} metricKey="STABLECOIN_FLOWS" dailyHigh={feed.STABLECOIN_HIGH} dailyLow={feed.STABLECOIN_LOW} />
+          <FeedRow label="Liquidations" unit="usd" value={feed.LIQUIDATIONS ?? 0} metricKey="LIQUIDATIONS" dailyHigh={feed.LIQUIDATIONS_HIGH} dailyLow={feed.LIQUIDATIONS_LOW} />
         </div>
 
       </div>
