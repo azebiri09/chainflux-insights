@@ -925,7 +925,7 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
       .then(r => r.json()),
     fetch("https://api.llama.fi/overview/dexs/ethereum?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyVolume")
       .then(r => r.json()),
-    fetch("https://api.llama.fi/bridges?includeChains=true")
+    fetch("https://api.llama.fi/v2/historicalChainTvl/ethereum")
       .then(r => r.json()),
     fetch("https://stablecoins.llama.fi/stablecoinchains")
       .then(r => r.json()),
