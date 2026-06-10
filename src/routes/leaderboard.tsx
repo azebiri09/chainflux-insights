@@ -48,7 +48,7 @@ function TierBadge({ tier }: { tier: number }) {
 
 async function fetchLeaderboard(): Promise<TraderRow[]> {
   const provider = new ethers.JsonRpcProvider(
-    "https://sepolia-rollup.arbitrum.io/rpc"
+    "https://arb-sepolia.g.alchemy.com/v2/6d-NCac8fCgKkqyBEC12f"
   );
   const contract = new ethers.Contract(PROXY_ADDRESS, CHAINFLUX_ABI, provider);
 
