@@ -1001,7 +1001,7 @@ async function fetchPressureData(etherscanKey: string): Promise<PressureData> {
   };
 }
 
-const ETHERSCAN_KEY = import.meta.env.VITE_ETHERSCAN_API_KEY ?? "";
+const ETHERSCAN_KEY = import.meta.env.ETHERSCAN_API_KEY ?? "";
 
 function usePressureData() {
   const [data, setData] = useState<PressureData>({
