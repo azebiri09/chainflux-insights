@@ -801,6 +801,7 @@ function AttentionScoreCard({
           utilState={utilState} utilValue={utilValue}
           dexState={dexState} dexValue={dexValue}
           tvlState={tvlState} tvlValue={tvlValue}
+          bridgeState={bridgeState} bridgeValue={bridgeValue}
           stableState={stableState} stableValue={stableValue}
           liqState={liqState} liqValue={liqValue}
         />
