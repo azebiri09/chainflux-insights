@@ -377,16 +377,51 @@ function formatValue(metric: string, value: number, extraData?: { tvlValue?: num
   if (value === 0) return "Loading";
   if (metric === "GAS") return value.toFixed(4);
   if (metric === "NET_UTILIZATION") return `${value.toFixed(1)}%`;
-  if (
-    metric === "DEX_VOLUME" ||
-    metric === "STABLECOIN_FLOWS" || metric === "LIQUIDATIONS"
-  ) {
+  if (metric === "DEX_VOLUME" || metric === "STABLECOIN_FLOWS" || metric === "LIQUIDATIONS") {
     if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
     if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
     if (value >= 1e3) return `$${(value / 1e3).toFixed(0)}K`;
     return `$${value.toFixed(0)}`;
   }
   return Math.round(value).toLocaleString();
+}
+
+function useAnimatedScore(target: number): number {
+  const [displayed, setDisplayed] = useState(target);
+  const prev = useRef(target);
+  useEffect(() => {
+    if (prev.current === target) return;
+    const start = prev.current;
+    const diff = target - start;
+    const duration = 800;
+    const startTime = performance.now();
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      setDisplayed(Math.round(start + diff * ease));
+      if (progress < 1) requestAnimationFrame(tick);
+      else prev.current = target;
+    };
+    requestAnimationFrame(tick);
+  }, [target]);
+  return displayed;
+}
+
+function useUpdatedAgo(updatedAt: number): string {
+  const [label, setLabel] = useState("");
+  useEffect(() => {
+    const update = () => {
+      if (!updatedAt) { setLabel(""); return; }
+      const secs = Math.floor((Date.now() - updatedAt) / 1000);
+      if (secs < 60) setLabel(`${secs}s ago`);
+      else setLabel(`${Math.floor(secs / 60)}m ago`);
+    };
+    update();
+    const id = setInterval(update, 5000);
+    return () => clearInterval(id);
+  }, [updatedAt]);
+  return label;
 }
 
 function StateTag({ state }: { state: "low" | "medium" | "high" }) {
@@ -488,6 +523,7 @@ function AttentionScoreCard({
   liqState: "low" | "medium" | "high"; liqValue: number;
 }) {
   const [open, setOpen] = useState(false);
+  const animatedScore = useAnimatedScore(score);
   const level = getAttentionLevel(score);
   const info = ATTENTION_LABELS[level];
   const phase = computeMarketPhase(score, gasState, txsState, addrState, dexState, stableState, liqState, tvlState);
@@ -506,12 +542,6 @@ function AttentionScoreCard({
   const circumference = 2 * Math.PI * 44;
   const offset = circumference - (score / 100) * circumference;
 
-  // Refined professional palette — muted, no neon, no glow.
-  const REFINED: Record<"low" | "medium" | "high", { stroke: string; chipBg: string; chipBorder: string; chipText: string; label: string }> = {
-    low:    { stroke: "rgba(148,163,184,0.85)", chipBg: "rgba(148,163,184,0.08)", chipBorder: "rgba(148,163,184,0.28)", chipText: "rgba(203,213,225,0.95)", label: "Cooling" },
-    medium: { stroke: "rgba(180,168,140,0.85)", chipBg: "rgba(180,168,140,0.08)", chipBorder: "rgba(180,168,140,0.28)", chipText: "rgba(215,205,180,0.95)", label: "Stable" },
-    high:   { stroke: "rgba(143,176,158,0.90)", chipBg: "rgba(143,176,158,0.08)", chipBorder: "rgba(143,176,158,0.30)", chipText: "rgba(196,219,206,0.95)", label: "Surging" },
-  };
   const weights = [20, 20, 10, 15, 10, 10, 5, 10];
   const donutR = 80;
   const donutC = 2 * Math.PI * donutR;
@@ -520,7 +550,7 @@ function AttentionScoreCard({
   return (
     <div
       className="rounded-2xl p-6 sm:p-8 mb-2 cursor-pointer select-none transition-colors"
-      style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.10)" }}
+      style={{ background: "rgba(255,255,255,0.03)", border: "2px solid rgba(255,255,255,0.18)", backdropFilter: "blur(20px)" }}
       onClick={() => setOpen(o => !o)}
     >
       <div className="text-[9px] tracking-[0.25em] uppercase font-semibold mb-4" style={{ color: "rgba(255,255,255,0.45)" }}>Ethereum Attention State</div>
@@ -530,29 +560,36 @@ function AttentionScoreCard({
             <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
             <circle
               cx="50" cy="50" r="44" fill="none"
-              stroke="rgba(255,255,255,0.85)"
+              stroke={info.color}
               strokeWidth="6"
               strokeDasharray={circumference}
               strokeDashoffset={offset}
               strokeLinecap="round"
               transform="rotate(-90 50 50)"
-              style={{ transition: "stroke-dashoffset 1s ease" }}
+              style={{ transition: "stroke-dashoffset 1s ease, stroke 0.5s ease", filter: `drop-shadow(0 0 6px ${info.color}60)` }}
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-2xl font-semibold tabular-nums" style={{ color: "rgba(255,255,255,0.95)" }}>{score}</div>
+            <div className="text-2xl font-bold tabular-nums" style={{ color: info.color }}>{animatedScore}</div>
             <div className="text-[9px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.35)" }}>score</div>
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-xl sm:text-2xl font-semibold mb-1" style={{ color: "rgba(255,255,255,0.95)" }}>{info.label}</div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: info.color }} />
+            <div className="text-xl sm:text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>{info.label}</div>
+          </div>
           <p className="text-sm mb-3" style={{ color: "rgba(255,255,255,0.60)" }}>{info.interpretation}</p>
           <div
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-medium tracking-wide uppercase"
-            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.75)" }}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold tracking-wide"
+            style={{ background: phase.ring, border: `1px solid ${phase.color}40`, color: phase.color }}
           >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: phase.color }} />
             {phase.label}
           </div>
+          {open && (
+            <p className="mt-3 text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>{phase.interpretation}</p>
+          )}
         </div>
         <div
           className="shrink-0 transition-transform duration-300 mt-1"
@@ -566,7 +603,6 @@ function AttentionScoreCard({
 
       {open && (
         <div className="mt-8 pt-8" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          {/* Large centered segmented donut */}
           <div className="flex flex-col items-center">
             <div className="relative" style={{ width: 220, height: 220 }}>
               <svg width="220" height="220" viewBox="0 0 220 220">
@@ -583,7 +619,7 @@ function AttentionScoreCard({
                       key={sig.label}
                       cx="110" cy="110" r={donutR}
                       fill="none"
-                      stroke={REFINED[sig.state].stroke}
+                      stroke={STATE_SEGMENT_COLORS[sig.state]}
                       strokeWidth="14"
                       strokeDasharray={dash}
                       transform={`rotate(${rot} 110 110)`}
@@ -592,36 +628,35 @@ function AttentionScoreCard({
                 })}
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-4xl font-semibold tabular-nums" style={{ color: "rgba(255,255,255,0.95)" }}>{score}</div>
+                <div className="text-4xl font-semibold tabular-nums" style={{ color: "rgba(255,255,255,0.95)" }}>{animatedScore}</div>
                 <div className="text-[9px] uppercase tracking-[0.25em] mt-1" style={{ color: "rgba(255,255,255,0.40)" }}>Attention</div>
               </div>
             </div>
 
-            {/* Legend row */}
             <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-              {(["low","medium","high"] as const).map((s) => (
+              {(["low", "medium", "high"] as const).map((s) => (
                 <div key={s} className="flex items-center gap-2">
-                  <span className="inline-block w-3 h-[3px] rounded-full" style={{ background: REFINED[s].stroke }} />
-                  <span className="text-[10px] uppercase tracking-[0.2em] font-medium" style={{ color: "rgba(255,255,255,0.55)" }}>{REFINED[s].label}</span>
+                  <span className="inline-block w-3 h-[3px] rounded-full" style={{ background: STATE_SEGMENT_COLORS[s] }} />
+                  <span className="text-[10px] uppercase tracking-[0.2em] font-medium" style={{ color: "rgba(255,255,255,0.55)" }}>
+                    {s === "low" ? "Cooling" : s === "medium" ? "Stable" : "Surging"}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Signal rows */}
           <div className="mt-8">
             <div className="text-[9px] tracking-[0.25em] uppercase font-semibold mb-3" style={{ color: "rgba(255,255,255,0.40)" }}>Signal Breakdown</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {SIGNALS.map((sig) => {
-                const r = REFINED[sig.state];
+                const c = STATE_COLORS[sig.state];
                 return (
                   <div
                     key={sig.label}
                     className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl"
-                    style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}
+                    style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", borderLeft: `3px solid ${c.bar}` }}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="inline-block w-[3px] h-5 rounded-full shrink-0" style={{ background: r.stroke }} />
                       <span className="text-xs font-medium truncate" style={{ color: "rgba(255,255,255,0.85)" }}>{sig.label}</span>
                       <span className="text-[9px] shrink-0 tabular-nums" style={{ color: "rgba(255,255,255,0.35)" }}>{sig.weight}</span>
                     </div>
@@ -629,9 +664,9 @@ function AttentionScoreCard({
                       <span className="text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.85)" }}>{sig.format(sig.value)}</span>
                       <span
                         className="text-[9px] tracking-[0.15em] uppercase font-semibold px-2 py-0.5 rounded-full"
-                        style={{ background: r.chipBg, color: r.chipText, border: `1px solid ${r.chipBorder}` }}
+                        style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}` }}
                       >
-                        {r.label}
+                        {sig.state === "low" ? "Cooling" : sig.state === "medium" ? "Stable" : "Surging"}
                       </span>
                     </div>
                   </div>
@@ -640,7 +675,6 @@ function AttentionScoreCard({
             </div>
           </div>
 
-          {/* Network summary */}
           <div className="mt-6 p-5 rounded-xl" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
             <div className="text-[9px] tracking-[0.25em] uppercase font-semibold mb-2" style={{ color: "rgba(255,255,255,0.40)" }}>Network Summary</div>
             <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.70)" }}>{phase.interpretation}</p>
@@ -653,14 +687,15 @@ function AttentionScoreCard({
 }
 
 function FeedRow({
-  label, unit, value, metricKey, dailyHigh, dailyLow, tradeable, tvlValue,
+  label, unit, value, metricKey, dailyHigh, dailyLow, tradeable, tvlValue, updatedAt,
 }: {
   label: string; unit: string; value: number | undefined; metricKey: string;
-  dailyHigh?: number; dailyLow?: number; tradeable?: boolean; tvlValue?: number;
+  dailyHigh?: number; dailyLow?: number; tradeable?: boolean; tvlValue?: number; updatedAt?: number;
 }) {
   const [open, setOpen] = useState(false);
   const feedData = useNetworkFeed();
   const history: number[] = (feedData as any)[`${metricKey}_HISTORY`] ?? [];
+  const ago = useUpdatedAgo(updatedAt ?? 0);
 
   const safeValue = value ?? 0;
   let state: "low" | "medium" | "high" = "medium";
@@ -668,21 +703,35 @@ function FeedRow({
   else if (metricKey === "TXS_PER_BLOCK") state = getMetricState("TXS_PER_BLOCK", safeValue);
   else if (metricKey === "ACTIVE_ADDRESSES") state = getMetricState("ACTIVE_ADDRESSES", safeValue);
   else if (metricKey === "NET_UTILIZATION") state = getUtilizationState(safeValue);
+  else if (metricKey === "TVL_CHANGE") state = getSimpleMetricState(safeValue, -5, 5);
   else state = getSimpleMetricState(safeValue, dailyLow ?? 0, dailyHigh ?? 1);
 
   const c = STATE_COLORS[state];
   const explanation = EXPLANATIONS[metricKey]?.[state];
 
+  const tvlBarPct = metricKey === "TVL_CHANGE"
+    ? Math.min(100, Math.max(0, ((safeValue + 5) / 10) * 100))
+    : 50;
+
   const barPct = metricKey === "NET_UTILIZATION"
     ? Math.min(100, safeValue)
+    : metricKey === "TVL_CHANGE"
+    ? tvlBarPct
     : (dailyHigh ?? 0) > (dailyLow ?? 0)
       ? Math.min(100, Math.max(0, ((safeValue - (dailyLow ?? 0)) / ((dailyHigh ?? 1) - (dailyLow ?? 0))) * 100))
       : 50;
 
+  const showBar = dailyHigh !== undefined || metricKey === "NET_UTILIZATION" || metricKey === "TVL_CHANGE";
+
   return (
     <div
       className="rounded-2xl overflow-hidden cursor-pointer select-none transition-all duration-200"
-      style={{ background: open ? c.bg : "rgba(255,255,255,0.03)", border: `2px solid ${open ? c.border : "rgba(255,255,255,0.18)"}`, backdropFilter: "blur(20px)" }}
+      style={{
+        background: open ? c.bg : "rgba(255,255,255,0.03)",
+        border: `2px solid ${open ? c.border : "rgba(255,255,255,0.18)"}`,
+        borderLeft: `3px solid ${c.bar}`,
+        backdropFilter: "blur(20px)",
+      }}
       onClick={() => setOpen(o => !o)}
     >
       <div className="flex items-center gap-3 px-5 py-4">
@@ -701,7 +750,7 @@ function FeedRow({
             <span className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.90)" }}>{label}</span>
             {tradeable && <TradeableBadge />}
           </div>
-          {(dailyHigh !== undefined || metricKey === "NET_UTILIZATION") && (
+          {showBar && (
             <div className="mt-1.5 flex items-center gap-2">
               <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
                 <div className="h-full rounded-full transition-all duration-700" style={{ width: `${barPct}%`, background: c.bar }} />
@@ -711,13 +760,16 @@ function FeedRow({
                   ? `${(dailyLow ?? 0).toFixed(2)} / ${(dailyHigh ?? 0).toFixed(2)}`
                   : metricKey === "NET_UTILIZATION"
                   ? `0% / 100%`
+                  : metricKey === "TVL_CHANGE"
+                  ? `-5% / +5%`
                   : metricKey === "DEX_VOLUME" || metricKey === "STABLECOIN_FLOWS" || metricKey === "LIQUIDATIONS"
                   ? `${formatValue(metricKey, dailyLow ?? 0)} / ${formatValue(metricKey, dailyHigh ?? 0)}`
-                  : metricKey === "TVL_CHANGE"
-                  ? ""
                   : `${Math.round(dailyLow ?? 0).toLocaleString()} / ${Math.round(dailyHigh ?? 0).toLocaleString()}`}
               </span>
             </div>
+          )}
+          {ago && (
+            <div className="mt-0.5 text-[9px]" style={{ color: "rgba(255,255,255,0.25)" }}>updated {ago}</div>
           )}
         </div>
         <MiniChart values={history} color={c.bar} />
@@ -731,7 +783,7 @@ function FeedRow({
                 <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight leading-none" style={{ color: "rgba(255,255,255,0.95)" }}>
                   {(tvlValue ?? 0) >= 1e9 ? `$${((tvlValue ?? 0) / 1e9).toFixed(2)}B` : (tvlValue ?? 0) >= 1e6 ? `$${((tvlValue ?? 0) / 1e6).toFixed(1)}M` : `$${(tvlValue ?? 0).toFixed(0)}`}
                 </div>
-                <div className="text-sm font-semibold tabular-nums mt-1" style={{ color: safeValue >= 0 ? "rgba(143,176,158,0.95)" : "rgba(212,160,160,0.95)" }}>
+                <div className="text-sm font-semibold tabular-nums mt-1" style={{ color: safeValue >= 0 ? "rgba(110,231,183,0.95)" : "rgba(252,165,165,0.95)" }}>
                   {`${safeValue >= 0 ? "+" : ""}${safeValue.toFixed(2)}%`}
                 </div>
                 <div className="text-[10px] uppercase tracking-widest mt-0.5" style={{ color: "rgba(255,255,255,0.50)" }}>{unit}</div>
@@ -794,6 +846,8 @@ function FeedPage() {
     liq: feed.LIQUIDATIONS ?? 0, liqHigh: feed.LIQUIDATIONS_HIGH ?? 1, liqLow: feed.LIQUIDATIONS_LOW ?? 0,
   });
 
+  const updatedAt = feed.updatedAt ?? 0;
+
   return (
     <Layout>
       <div className="fixed inset-0 pointer-events-none" style={{ background: "#000000" }} />
@@ -834,9 +888,9 @@ function FeedPage() {
         </p>
 
         <div className="flex flex-col gap-4">
-          <FeedRow label="Gas Price" unit="gwei" value={gas.current} metricKey="GAS" dailyHigh={feed.GAS_DAILY_HIGH} dailyLow={feed.GAS_DAILY_LOW} tradeable />
-          <FeedRow label="Transactions Per Block" unit="txs" value={txs.current} metricKey="TXS_PER_BLOCK" dailyHigh={feed.TXS_DAILY_HIGH} dailyLow={feed.TXS_DAILY_LOW} tradeable />
-          <FeedRow label="Active Addresses" unit="addresses" value={feed.ACTIVE_ADDRESSES} metricKey="ACTIVE_ADDRESSES" dailyHigh={feed.ACTIVE_DAILY_HIGH} dailyLow={feed.ACTIVE_DAILY_LOW} />
+          <FeedRow label="Gas Price" unit="gwei" value={gas.current} metricKey="GAS" dailyHigh={feed.GAS_DAILY_HIGH} dailyLow={feed.GAS_DAILY_LOW} tradeable updatedAt={updatedAt} />
+          <FeedRow label="Transactions Per Block" unit="txs" value={txs.current} metricKey="TXS_PER_BLOCK" dailyHigh={feed.TXS_DAILY_HIGH} dailyLow={feed.TXS_DAILY_LOW} tradeable updatedAt={updatedAt} />
+          <FeedRow label="Active Addresses" unit="addresses" value={feed.ACTIVE_ADDRESSES} metricKey="ACTIVE_ADDRESSES" dailyHigh={feed.ACTIVE_DAILY_HIGH} dailyLow={feed.ACTIVE_DAILY_LOW} updatedAt={updatedAt} />
         </div>
 
         <div className="flex items-center gap-4 my-8">
@@ -850,11 +904,11 @@ function FeedPage() {
         </p>
 
         <div className="flex flex-col gap-4">
-          <FeedRow label="Network Utilization" unit="capacity" value={feed.NET_UTILIZATION ?? 0} metricKey="NET_UTILIZATION" />
-          <FeedRow label="DEX Volume 24h" unit="usd" value={feed.DEX_VOLUME ?? 0} metricKey="DEX_VOLUME" dailyHigh={feed.DEX_VOLUME_HIGH} dailyLow={feed.DEX_VOLUME_LOW} />
-          <FeedRow label="DeFi TVL Change 24h" unit="tvl" value={feed.TVL_CHANGE ?? 0} metricKey="TVL_CHANGE" tvlValue={feed.TVL_VALUE ?? 0} />
-          <FeedRow label="Stablecoin Flows" unit="usd" value={feed.STABLECOIN_FLOWS ?? 0} metricKey="STABLECOIN_FLOWS" dailyHigh={feed.STABLECOIN_HIGH} dailyLow={feed.STABLECOIN_LOW} />
-          <FeedRow label="Liquidations" unit="usd" value={feed.LIQUIDATIONS ?? 0} metricKey="LIQUIDATIONS" dailyHigh={feed.LIQUIDATIONS_HIGH} dailyLow={feed.LIQUIDATIONS_LOW} />
+          <FeedRow label="Network Utilization" unit="capacity" value={feed.NET_UTILIZATION ?? 0} metricKey="NET_UTILIZATION" updatedAt={updatedAt} />
+          <FeedRow label="DEX Volume 24h" unit="usd" value={feed.DEX_VOLUME ?? 0} metricKey="DEX_VOLUME" dailyHigh={feed.DEX_VOLUME_HIGH} dailyLow={feed.DEX_VOLUME_LOW} updatedAt={updatedAt} />
+          <FeedRow label="DeFi TVL Change 24h" unit="tvl" value={feed.TVL_CHANGE ?? 0} metricKey="TVL_CHANGE" tvlValue={feed.TVL_VALUE ?? 0} updatedAt={updatedAt} />
+          <FeedRow label="Stablecoin Flows" unit="usd" value={feed.STABLECOIN_FLOWS ?? 0} metricKey="STABLECOIN_FLOWS" dailyHigh={feed.STABLECOIN_HIGH} dailyLow={feed.STABLECOIN_LOW} updatedAt={updatedAt} />
+          <FeedRow label="Liquidations" unit="usd" value={feed.LIQUIDATIONS ?? 0} metricKey="LIQUIDATIONS" dailyHigh={feed.LIQUIDATIONS_HIGH} dailyLow={feed.LIQUIDATIONS_LOW} updatedAt={updatedAt} />
         </div>
 
       </div>
