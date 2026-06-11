@@ -490,7 +490,7 @@ function ExplainCell({ label, text, icon, highlight }: { label: string; text: st
 
 function EthLogo() {
   return (
-    <div className="absolute top-0 right-0 pointer-events-none select-none" style={{ opacity: 0.06 }}>
+    <div className="absolute top-0 right-0 pointer-events-none select-none" style={{ opacity: 0.15 }}>
       <svg width="180" height="180" viewBox="0 0 256 417" fill="white">
         <path d="M127.9 0L125 9.5V285l2.9 2.9 127.9-75.6z" />
         <path d="M127.9 0L0 212.3l127.9 75.6V0z" opacity=".6" />
