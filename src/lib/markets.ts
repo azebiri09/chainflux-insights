@@ -134,6 +134,7 @@ export type FeedData = {
   ACTIVE_DAILY_HIGH: number;
   ACTIVE_DAILY_LOW: number;
   TVL_CHANGE: number;
+  TVL_VALUE: number;
   NET_UTILIZATION: number;
   DEX_VOLUME: number;
   DEX_VOLUME_HIGH: number;
@@ -158,6 +159,7 @@ const EMPTY_FEED: FeedData = {
   ACTIVE_DAILY_HIGH: 0,
   ACTIVE_DAILY_LOW: 0,
   TVL_CHANGE: 0,
+  TVL_VALUE: 0,
   NET_UTILIZATION: 0,
   DEX_VOLUME: 0,
   DEX_VOLUME_HIGH: 1,
