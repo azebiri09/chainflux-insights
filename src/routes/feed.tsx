@@ -364,12 +364,21 @@ function getUtilizationState(value: number): "low" | "medium" | "high" {
   return "high";
 }
 
-function formatValue(metric: string, value: number): string {
+function formatValue(metric: string, value: number, extraData?: { tvlValue?: number }): string {
+  if (metric === "TVL_CHANGE") {
+    const tvlValue = extraData?.tvlValue ?? 0;
+    if (tvlValue === 0 && value === 0) return "Loading";
+    const sign = value >= 0 ? "+" : "";
+    const pct = `${sign}${value.toFixed(2)}%`;
+    if (tvlValue >= 1e9) return `$${(tvlValue / 1e9).toFixed(2)}B ${pct}`;
+    if (tvlValue >= 1e6) return `$${(tvlValue / 1e6).toFixed(1)}M ${pct}`;
+    return `$${tvlValue.toFixed(0)} ${pct}`;
+  }
   if (value === 0) return "Loading";
   if (metric === "GAS") return value.toFixed(4);
   if (metric === "NET_UTILIZATION") return `${value.toFixed(1)}%`;
   if (
-    metric === "DEX_VOLUME" || metric === "TVL_CHANGE" ||
+    metric === "DEX_VOLUME" ||
     metric === "STABLECOIN_FLOWS" || metric === "LIQUIDATIONS"
   ) {
     if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
@@ -399,8 +408,8 @@ function TradeableBadge() {
       className="inline-flex items-center text-[8px] tracking-[0.18em] uppercase px-2 py-0.5 rounded-full font-bold shrink-0"
       style={{
         background: "rgba(52,211,153,0.10)",
-        border: "1px solid rgba(52,211,153,0.35)",
-        color: "rgba(110,231,183,0.90)",
+        border: "1px solid rgba(52,211,153,0.30)",
+        color: "#6ee7b7",
       }}
     >
       Tradeable
@@ -409,445 +418,241 @@ function TradeableBadge() {
 }
 
 function MiniChart({ values, color }: { values: number[]; color: string }) {
-  if (values.length < 2) return <div className="w-20 h-8 shrink-0" />;
+  if (!values || values.length < 2) return <div className="w-16 h-8" />;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
-  const w = 80; const h = 32;
+  const w = 64, h = 32, pad = 2;
   const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * w;
-    const y = h - ((v - min) / range) * (h - 4) - 2;
+    const x = pad + (i / (values.length - 1)) * (w - pad * 2);
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
     return `${x},${y}`;
-  });
-  const areaPath = `M${pts[0]} L${pts.join(" L")} L${w},${h} L0,${h} Z`;
-  const gradId = `grad${color.replace(/[^a-z0-9]/gi, "")}`;
+  }).join(" ");
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" className="shrink-0">
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.30" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={areaPath} fill={`url(#${gradId})`} />
-      <polyline points={pts.join(" ")} stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
     </svg>
   );
 }
 
-function useRollingValues(value: number, maxLen = 30) {
-  const historyRef = useRef<number[]>([]);
-  const [history, setHistory] = useState<number[]>([]);
-  useEffect(() => {
-    if (value === 0) return;
-    historyRef.current = [...historyRef.current.slice(-(maxLen - 1)), value];
-    setHistory([...historyRef.current]);
-  }, [value]);
-  return history;
-}
-
-function ExplainCell({ label, text, icon, highlight }: { label: string; text: string; icon: React.ReactNode; highlight?: boolean; }) {
+function ExplainCell({ label, text, icon, highlight }: { label: string; text: string; icon: React.ReactNode; highlight?: boolean }) {
   return (
     <div
-      className="flex gap-3 p-4 rounded-xl h-full"
-      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)" }}
+      className="rounded-xl p-4"
+      style={{
+        background: highlight ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.02)",
+        border: "1px solid rgba(255,255,255,0.07)",
+      }}
     >
-      <div
-        className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center mt-0.5"
-        style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.70)" }}
-      >
-        {icon}
+      <div className="flex items-center gap-2 mb-2">
+        <span style={{ color: "rgba(255,255,255,0.35)" }}>{icon}</span>
+        <span className="text-[9px] tracking-[0.2em] uppercase font-semibold" style={{ color: "rgba(255,255,255,0.40)" }}>{label}</span>
       </div>
-      <div className="flex flex-col gap-1 min-w-0">
-        <div className="text-[9px] tracking-[0.22em] uppercase font-semibold" style={{ color: "rgba(255,255,255,0.65)" }}>{label}</div>
-        <div className="text-sm leading-relaxed" style={{ color: highlight ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.80)" }}>
-          {text}
-        </div>
-      </div>
+      <p className="text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.70)" }}>{text}</p>
     </div>
   );
 }
 
 function EthLogo() {
   return (
-    <div className="absolute right-4 sm:right-0 top-0 w-36 h-36 sm:w-52 sm:h-52 pointer-events-none select-none flex items-center justify-center opacity-30">
-      <svg viewBox="0 0 256 417" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-        <polygon points="127.9611,0 125.1661,9.5 125.1661,285.168 127.9611,287.958 255.9231,212.32" fill="rgba(255,255,255,0.6)" />
-        <polygon points="127.962,0 0,212.32 127.962,287.959 127.962,154.158" fill="rgba(255,255,255,0.45)" />
-        <polygon points="127.9611,312.1866 126.3861,314.1066 126.3861,412.3056 127.9611,416.9066 255.9991,236.5866" fill="rgba(255,255,255,0.55)" />
-        <polygon points="127.962,416.9052 127.962,312.1852 0,236.5852" fill="rgba(255,255,255,0.40)" />
-        <polygon points="127.9611,287.9577 255.9211,212.3207 127.9611,154.1587" fill="rgba(255,255,255,0.35)" />
-        <polygon points="0.0009,212.3207 127.9609,287.9577 127.9609,154.1587" fill="rgba(255,255,255,0.25)" />
+    <div className="absolute top-0 right-0 pointer-events-none select-none" style={{ opacity: 0.06 }}>
+      <svg width="180" height="180" viewBox="0 0 256 417" fill="white">
+        <path d="M127.9 0L125 9.5V285l2.9 2.9 127.9-75.6z" />
+        <path d="M127.9 0L0 212.3l127.9 75.6V0z" opacity=".6" />
+        <path d="M127.9 311.5l-1.6 1.9v100l1.6 4.6 128-180.3z" />
+        <path d="M127.9 417V311.5L0 237.7z" opacity=".6" />
+        <path d="M127.9 287.9L255.8 212.3 127.9 155.5z" opacity=".2" />
+        <path d="M0 212.3l127.9 75.6V155.5z" opacity=".6" />
       </svg>
     </div>
   );
 }
 
-function buildNetworkSummary(
-  gasState: "low" | "medium" | "high",
-  txsState: "low" | "medium" | "high",
-  addrState: "low" | "medium" | "high"
-): string {
-  const gasDesc = {
-    low: "Gas fees are low, indicating minimal competition for block space.",
-    medium: "Gas fees are at a moderate level, reflecting steady but unremarkable demand for block space.",
-    high: "Gas fees are elevated, signaling strong competition for block space and high execution demand.",
-  };
-  const txsDesc = {
-    low: "Block throughput is quiet, with relatively few transactions being processed.",
-    medium: "Blocks are processing a steady volume of transactions without any notable congestion.",
-    high: "Blocks are filling with a high number of transactions, reflecting intense network usage.",
-  };
-  const addrDesc = {
-    low: "Wallet participation is light, with fewer unique addresses active on the network.",
-    medium: "Wallet participation is moderate, with a typical number of addresses transacting.",
-    high: "Wallet participation is broad, with a large number of unique addresses active across the network.",
-  };
-  const allHigh = gasState === "high" && txsState === "high" && addrState === "high";
-  const allLow = gasState === "low" && txsState === "low" && addrState === "low";
-  const mostlyHigh = [gasState, txsState, addrState].filter(s => s === "high").length >= 2;
-  const mostlyLow = [gasState, txsState, addrState].filter(s => s === "low").length >= 2;
-  let closing = "";
-  if (allHigh) closing = "All three signals are elevated simultaneously, which is a strong indicator of coordinated network demand and broad user activity.";
-  else if (allLow) closing = "The network is quiet across all dimensions with no signs of unusual demand, congestion, or elevated participation.";
-  else if (mostlyHigh) closing = "The majority of network signals are elevated, suggesting broad demand is building even if not every metric is at its peak.";
-  else if (mostlyLow) closing = "Most signals are subdued, pointing to a generally quiet network with limited pressure across gas, throughput, and participation.";
-  else closing = "Signals are mixed across the network, reflecting uneven activity rather than a uniform shift in one direction.";
-  return `${gasDesc[gasState]} ${txsDesc[txsState]} ${addrDesc[addrState]} ${closing}`;
-}
-
-function AnimatedDonut({
-  segments,
-  animate,
-  size = 220,
-}: {
-  segments: { label: string; weight: number; state: "low" | "medium" | "high" }[];
-  animate: boolean;
-  size?: number;
-}) {
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size * 0.36;
-  const strokeWidth = size * 0.10;
-  const circumference = 2 * Math.PI * r;
-  const gapDeg = 3;
-  const gapFraction = (gapDeg / 360) * circumference;
-  const totalGap = gapFraction * segments.length;
-  const usable = circumference - totalGap;
-
-  let offset = 0;
-  const arcs = segments.map((seg) => {
-    const segLen = seg.weight * usable;
-    const dashArray = `${segLen} ${circumference - segLen}`;
-    const dashOffset = -(offset);
-    offset += segLen + gapFraction;
-    const color = STATE_SEGMENT_COLORS[seg.state];
-    const glow = STATE_GLOW[seg.state];
-    return { seg, color, glow, dashArray, dashOffset, segLen };
-  });
-
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      style={{ transform: "rotate(-90deg)" }}
-    >
-      <defs>
-        {arcs.map(({ seg, glow }) => (
-          <filter key={`glow-${seg.label}`} id={`glow-${seg.label}-${size}`} x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feFlood floodColor={glow} result="color" />
-            <feComposite in="color" in2="blur" operator="in" result="shadow" />
-            <feMerge><feMergeNode in="shadow" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-        ))}
-      </defs>
-      <circle
-        cx={cx} cy={cy} r={r}
-        fill="none"
-        stroke="rgba(255,255,255,0.06)"
-        strokeWidth={strokeWidth}
-      />
-      {arcs.map(({ seg, color, dashArray, dashOffset, segLen }) => (
-        <circle
-          key={seg.label}
-          cx={cx} cy={cy} r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeLinecap="butt"
-          strokeDasharray={dashArray}
-          strokeDashoffset={animate ? dashOffset : dashOffset - segLen}
-          filter={`url(#glow-${seg.label}-${size})`}
-          style={{
-            transition: animate
-              ? `stroke-dashoffset 1.1s cubic-bezier(0.4,0,0.2,1) ${arcs.findIndex(a => a.seg.label === seg.label) * 0.08}s`
-              : "none",
-          }}
-        />
-      ))}
-    </svg>
-  );
-}
-
-function ScoreBreakdown({
-  gasState, txsState, addrState, gasValue, txsValue, addrValue,
-  utilState, utilValue, dexState, dexValue, tvlState, tvlValue,
-  stableState, stableValue, liqState, liqValue, score,
-}: {
-  gasState: "low" | "medium" | "high"; txsState: "low" | "medium" | "high"; addrState: "low" | "medium" | "high";
-  gasValue: number; txsValue: number; addrValue: number;
-  utilState: "low" | "medium" | "high"; utilValue: number;
-  dexState: "low" | "medium" | "high"; dexValue: number;
-  tvlState: "low" | "medium" | "high"; tvlValue: number;
-  stableState: "low" | "medium" | "high"; stableValue: number;
-  liqState: "low" | "medium" | "high"; liqValue: number;
-  score: number;
-}) {
-  const [animate, setAnimate] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setAnimate(true), 80);
-    return () => clearTimeout(t);
-  }, []);
-
-  const summary = buildNetworkSummary(gasState, txsState, addrState);
-  const stateLabel: Record<"low" | "medium" | "high", string> = { low: "Cooling", medium: "Stable", high: "Surging" };
-  const level = getAttentionLevel(score);
-  const info = ATTENTION_LABELS[level];
-
-  const segments = [
-    { label: "Gas", weight: 0.20, state: gasState },
-    { label: "TXS", weight: 0.20, state: txsState },
-    { label: "Addr", weight: 0.10, state: addrState },
-    { label: "Util", weight: 0.15, state: utilState },
-    { label: "DEX", weight: 0.10, state: dexState },
-    { label: "TVL", weight: 0.10, state: tvlState },
-    { label: "Stable", weight: 0.05, state: stableState },
-    { label: "Liq", weight: 0.10, state: liqState },
-  ];
-
-  const rows = [
-    { label: "Gas Price", key: "GAS", weight: "20%", state: gasState, value: gasValue > 0 ? `${gasValue.toFixed(2)} gwei` : "Loading", icon: <Fire size={18} weight="duotone" /> },
-    { label: "Transactions Per Block", key: "TXS_PER_BLOCK", weight: "20%", state: txsState, value: txsValue > 0 ? `${Math.round(txsValue).toLocaleString()} txs` : "Loading", icon: <ArrowsLeftRight size={18} weight="duotone" /> },
-    { label: "Active Addresses", key: "ACTIVE_ADDRESSES", weight: "10%", state: addrState, value: addrValue > 0 ? Math.round(addrValue).toLocaleString() : "Loading", icon: <Users size={18} weight="duotone" /> },
-    { label: "Network Utilization", key: "NET_UTILIZATION", weight: "15%", state: utilState, value: utilValue > 0 ? `${utilValue.toFixed(1)}%` : "Loading", icon: <Gauge size={18} weight="duotone" /> },
-    { label: "DEX Volume 24h", key: "DEX_VOLUME", weight: "10%", state: dexState, value: dexValue > 0 ? formatValue("DEX_VOLUME", dexValue) : "Loading", icon: <CurrencyDollar size={18} weight="duotone" /> },
-    { label: "DeFi TVL Change 24h", key: "TVL_CHANGE", weight: "10%", state: tvlState, value: tvlValue > 0 ? formatValue("TVL_CHANGE", tvlValue) : "Loading", icon: <ChartLineUp size={18} weight="duotone" /> },
-    { label: "Stablecoin Flows", key: "STABLECOIN_FLOWS", weight: "5%", state: stableState, value: stableValue > 0 ? formatValue("STABLECOIN_FLOWS", stableValue) : "Loading", icon: <Coin size={18} weight="duotone" /> },
-    { label: "Liquidations", key: "LIQUIDATIONS", weight: "10%", state: liqState, value: liqValue > 0 ? formatValue("LIQUIDATIONS", liqValue) : "Loading", icon: <Drop size={18} weight="duotone" /> },
-  ];
-
-  return (
-    <div className="mt-6 pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.10)" }}>
-      <div className="flex flex-col items-center mb-8">
-        <div className="relative" style={{ width: 240, height: 240 }}>
-          <AnimatedDonut segments={segments} animate={animate} size={240} />
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <div className="text-5xl font-bold tabular-nums leading-none" style={{ color: info.color }}>{score}</div>
-            <div className="text-[9px] tracking-[0.25em] uppercase mt-2" style={{ color: "rgba(255,255,255,0.55)" }}>Attention Score</div>
-          </div>
-        </div>
-        <div className="flex flex-wrap justify-center gap-2 mt-4">
-          {segments.map((seg) => (
-            <div key={seg.label} className="flex items-center gap-1.5 px-2 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)" }}>
-              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: STATE_SEGMENT_COLORS[seg.state] }} />
-              <span className="text-[9px] tracking-wider uppercase font-semibold" style={{ color: "rgba(255,255,255,0.65)" }}>{seg.label}</span>
-              <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.35)" }}>{(seg.weight * 100).toFixed(0)}%</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="flex flex-col gap-2">
-        {rows.map((row) => {
-          const color = STATE_SEGMENT_COLORS[row.state];
-          const glow = STATE_GLOW[row.state];
-          const c = STATE_COLORS[row.state];
-          return (
-            <div
-              key={row.key}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-              style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${c.border}`, boxShadow: `0 0 12px ${glow}` }}
-            >
-              <div className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: c.iconBg, color: c.iconColor }}>
-                {row.icon}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-white font-semibold text-xs leading-tight truncate">{row.label}</div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[8px] tracking-[0.15em] uppercase font-bold px-1.5 py-0.5 rounded-full" style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}` }}>
-                    {stateLabel[row.state]}
-                  </span>
-                  <span className="text-[9px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.45)" }}>{row.weight}</span>
-                </div>
-              </div>
-              <div className="shrink-0 text-right font-bold tabular-nums text-sm" style={{ color }}>{row.value}</div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-6 p-5 rounded-xl" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)" }}>
-        <div className="text-[9px] tracking-[0.25em] uppercase font-semibold mb-3" style={{ color: "rgba(255,255,255,0.55)" }}>Network Summary</div>
-        <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.90)" }}>{summary}</p>
-      </div>
-    </div>
-  );
-}
-
 function AttentionScoreCard({
-  score, gasState, txsState, addrState, gasValue, txsValue, addrValue,
-  utilState, utilValue, dexState, dexValue, tvlState, tvlValue,
-  stableState, stableValue, liqState, liqValue,
+  score,
+  gasState, txsState, addrState,
+  gasValue, txsValue, addrValue,
+  utilState, utilValue,
+  dexState, dexValue,
+  tvlState, tvlValue, tvlChangeValue,
+  stableState, stableValue,
+  liqState, liqValue,
 }: {
   score: number;
   gasState: "low" | "medium" | "high"; txsState: "low" | "medium" | "high"; addrState: "low" | "medium" | "high";
   gasValue: number; txsValue: number; addrValue: number;
   utilState: "low" | "medium" | "high"; utilValue: number;
   dexState: "low" | "medium" | "high"; dexValue: number;
-  tvlState: "low" | "medium" | "high"; tvlValue: number;
+  tvlState: "low" | "medium" | "high"; tvlValue: number; tvlChangeValue: number;
   stableState: "low" | "medium" | "high"; stableValue: number;
   liqState: "low" | "medium" | "high"; liqValue: number;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false);
   const level = getAttentionLevel(score);
   const info = ATTENTION_LABELS[level];
   const phase = computeMarketPhase(score, gasState, txsState, addrState, dexState, stableState, liqState, tvlState);
-  const circumference = 2 * Math.PI * 54;
-  const filled = (score / 100) * circumference;
+
+  const SIGNALS = [
+    { label: "Gas Price", weight: "20%", state: gasState, value: gasValue, format: (v: number) => `${v.toFixed(2)} gwei` },
+    { label: "Transactions Per Block", weight: "20%", state: txsState, value: txsValue, format: (v: number) => `${Math.round(v)} txs` },
+    { label: "Active Addresses", weight: "10%", state: addrState, value: addrValue, format: (v: number) => `${Math.round(v).toLocaleString()}` },
+    { label: "Network Utilization", weight: "15%", state: utilState, value: utilValue, format: (v: number) => `${v.toFixed(1)}%` },
+    { label: "DEX Volume", weight: "10%", state: dexState, value: dexValue, format: (v: number) => v >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : `$${v.toFixed(0)}` },
+    { label: "DeFi TVL Change", weight: "10%", state: tvlState, value: tvlChangeValue, format: (v: number) => { const sign = v >= 0 ? "+" : ""; return `${sign}${v.toFixed(2)}%`; } },
+    { label: "Stablecoin Flows", weight: "5%", state: stableState, value: stableValue, format: (v: number) => v >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : `$${v.toFixed(0)}` },
+    { label: "Liquidations", weight: "10%", state: liqState, value: liqValue, format: (v: number) => v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : `$${(v / 1e3).toFixed(0)}K` },
+  ];
+
+  const circumference = 2 * Math.PI * 44;
+  const offset = circumference - (score / 100) * circumference;
 
   return (
     <div
-      className="rounded-2xl p-6 sm:p-8 mb-4 relative overflow-hidden cursor-pointer select-none"
-      style={{
-        background: "rgba(255,255,255,0.04)",
-        border: `2px solid ${expanded ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.18)"}`,
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-        transition: "border-color 0.2s ease",
-      }}
-      onClick={() => setExpanded((e) => !e)}
+      className="rounded-2xl p-6 sm:p-8 mb-2 cursor-pointer select-none"
+      style={{ background: "rgba(255,255,255,0.03)", border: "2px solid rgba(255,255,255,0.18)", backdropFilter: "blur(20px)" }}
+      onClick={() => setOpen(o => !o)}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-10">
-        <div className="relative w-36 h-36 mx-auto sm:mx-0 shrink-0">
-          <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
-            <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-            <circle cx="60" cy="60" r="54" fill="none" stroke={info.color} strokeWidth="8" strokeLinecap="round"
-              strokeDasharray={`${filled} ${circumference}`}
-              style={{ transition: "stroke-dasharray 1s ease", filter: `drop-shadow(0 0 6px ${info.color})` }}
+      <div className="text-[9px] tracking-[0.25em] uppercase font-semibold mb-4" style={{ color: "rgba(255,255,255,0.45)" }}>Ethereum Attention State</div>
+      <div className="flex items-start gap-6 sm:gap-10">
+        <div className="relative shrink-0">
+          <svg width="100" height="100" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="7" />
+            <circle
+              cx="50" cy="50" r="44" fill="none"
+              stroke={info.color}
+              strokeWidth="7"
+              strokeDasharray={circumference}
+              strokeDashoffset={offset}
+              strokeLinecap="round"
+              transform="rotate(-90 50 50)"
+              style={{ transition: "stroke-dashoffset 1s ease, stroke 0.5s ease", filter: `drop-shadow(0 0 6px ${info.color}60)` }}
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-4xl font-bold text-white tabular-nums leading-none">{score}</div>
-            <div className="text-[9px] tracking-[0.2em] uppercase mt-1" style={{ color: "rgba(255,255,255,0.55)" }}>Score</div>
+            <div className="text-2xl font-bold tabular-nums" style={{ color: info.color }}>{score}</div>
+            <div className="text-[9px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.35)" }}>score</div>
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] tracking-[0.25em] uppercase font-semibold mb-3" style={{ color: "rgba(255,255,255,0.60)" }}>Ethereum Attention State</div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="relative flex items-center justify-center shrink-0" style={{ width: 18, height: 18 }}>
-              <div className="absolute rounded-full" style={{ width: 18, height: 18, background: info.ring }} />
-              <div className="relative rounded-full" style={{ width: 9, height: 9, background: info.color }} />
-            </div>
-            <div className="text-2xl sm:text-3xl font-bold text-white leading-tight">{info.label}</div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: info.color }} />
+            <div className="text-xl sm:text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>{info.label}</div>
           </div>
-          <p className="text-sm leading-relaxed mb-4" style={{ color: "rgba(255,255,255,0.75)" }}>{info.interpretation}</p>
+          <p className="text-sm mb-3" style={{ color: "rgba(255,255,255,0.60)" }}>{info.interpretation}</p>
           <div
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl mb-4"
-            style={{ background: phase.ring, border: `1px solid ${phase.color}40` }}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold tracking-wide"
+            style={{ background: phase.ring, border: `1px solid ${phase.color}40`, color: phase.color }}
           >
-            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: phase.color }} />
-            <span className="text-xs font-bold tracking-wide" style={{ color: phase.color }}>{phase.label}</span>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: phase.color }} />
+            {phase.label}
           </div>
-          <p className="text-sm leading-relaxed mb-3" style={{ color: "rgba(255,255,255,0.80)" }}>{phase.summary}</p>
-          <p className="text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>{phase.interpretation}</p>
+          {open && (
+            <p className="mt-3 text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>{phase.interpretation}</p>
+          )}
         </div>
         <div
-          className="shrink-0 transition-transform duration-300 self-start sm:self-center ml-auto sm:ml-0"
-          style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", color: "rgba(255,255,255,0.55)" }}
+          className="shrink-0 transition-transform duration-300 mt-1"
+          style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", color: "rgba(255,255,255,0.40)" }}
         >
-          <svg width="16" height="16" viewBox="0 0 14 14" fill="none">
-            <path d="M2 5L7 10L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 6L8 11L13 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
       </div>
-      {expanded && (
-        <ScoreBreakdown
-          score={score}
-          gasState={gasState} txsState={txsState} addrState={addrState}
-          gasValue={gasValue} txsValue={txsValue} addrValue={addrValue}
-          utilState={utilState} utilValue={utilValue}
-          dexState={dexState} dexValue={dexValue}
-          tvlState={tvlState} tvlValue={tvlValue}
-          stableState={stableState} stableValue={stableValue}
-          liqState={liqState} liqValue={liqValue}
-        />
+
+      {open && (
+        <div className="mt-6 pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          <div className="text-[9px] tracking-[0.25em] uppercase font-semibold mb-4" style={{ color: "rgba(255,255,255,0.35)" }}>Signal Breakdown</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {SIGNALS.map((sig) => {
+              const c = STATE_COLORS[sig.state];
+              return (
+                <div key={sig.label} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c.bar }} />
+                    <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.65)" }}>{sig.label}</span>
+                    <span className="text-[9px] shrink-0" style={{ color: "rgba(255,255,255,0.25)" }}>{sig.weight}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.80)" }}>{sig.format(sig.value)}</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}` }}>
+                      {sig.state === "low" ? "Cooling" : sig.state === "medium" ? "Stable" : "Surging"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-4 text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.40)" }}>{info.description}</p>
+        </div>
       )}
     </div>
   );
 }
 
 function FeedRow({
-  label, unit, value, metricKey, dailyHigh, dailyLow, tradeable,
+  label, unit, value, metricKey, dailyHigh, dailyLow, tradeable, tvlValue,
 }: {
-  label: string; unit: string; value: number; metricKey: string;
-  dailyHigh?: number; dailyLow?: number; tradeable?: boolean;
+  label: string; unit: string; value: number | undefined; metricKey: string;
+  dailyHigh?: number; dailyLow?: number; tradeable?: boolean; tvlValue?: number;
 }) {
   const [open, setOpen] = useState(false);
-  const state = metricKey === "GAS" || metricKey === "TXS_PER_BLOCK" || metricKey === "ACTIVE_ADDRESSES"
-    ? getMetricState(metricKey, value)
-    : metricKey === "NET_UTILIZATION"
-    ? getUtilizationState(value)
-    : getSimpleMetricState(value, dailyLow ?? 0, dailyHigh ?? 0);
+  const feedData = useNetworkFeed();
+  const history: number[] = (feedData as any)[`${metricKey}_HISTORY`] ?? [];
+
+  const safeValue = value ?? 0;
+  let state: "low" | "medium" | "high" = "medium";
+  if (metricKey === "GAS") state = getMetricState("GAS", safeValue);
+  else if (metricKey === "TXS_PER_BLOCK") state = getMetricState("TXS_PER_BLOCK", safeValue);
+  else if (metricKey === "ACTIVE_ADDRESSES") state = getMetricState("ACTIVE_ADDRESSES", safeValue);
+  else if (metricKey === "NET_UTILIZATION") state = getUtilizationState(safeValue);
+  else state = getSimpleMetricState(safeValue, dailyLow ?? 0, dailyHigh ?? 1);
+
   const c = STATE_COLORS[state];
   const explanation = EXPLANATIONS[metricKey]?.[state];
-  const history = useRollingValues(value);
 
-  const range = (dailyHigh ?? 0) - (dailyLow ?? 0);
-  const position = range > 0 ? ((value - (dailyLow ?? 0)) / range) * 100 : metricKey === "NET_UTILIZATION" ? value : 50;
-  const clampedPosition = Math.min(100, Math.max(2, position));
-
-  const metricIcon: Record<string, React.ReactNode> = {
-    GAS: <Fire size={20} weight="duotone" />,
-    TXS_PER_BLOCK: <ArrowsLeftRight size={20} weight="duotone" />,
-    ACTIVE_ADDRESSES: <Users size={20} weight="duotone" />,
-    NET_UTILIZATION: <Gauge size={20} weight="duotone" />,
-    DEX_VOLUME: <CurrencyDollar size={20} weight="duotone" />,
-    TVL_CHANGE: <ChartLineUp size={20} weight="duotone" />,
-    STABLECOIN_FLOWS: <Coin size={20} weight="duotone" />,
-    LIQUIDATIONS: <Drop size={20} weight="duotone" />,
-  };
+  const barPct = metricKey === "NET_UTILIZATION"
+    ? Math.min(100, safeValue)
+    : (dailyHigh ?? 0) > (dailyLow ?? 0)
+      ? Math.min(100, Math.max(0, ((safeValue - (dailyLow ?? 0)) / ((dailyHigh ?? 1) - (dailyLow ?? 0))) * 100))
+      : 50;
 
   return (
     <div
-      className="rounded-2xl w-full overflow-hidden transition-all duration-200"
-      style={{
-        background: "rgba(255,255,255,0.04)",
-        border: `2px solid ${open ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.18)"}`,
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-      }}
+      className="rounded-2xl overflow-hidden cursor-pointer select-none transition-all duration-200"
+      style={{ background: open ? c.bg : "rgba(255,255,255,0.03)", border: `2px solid ${open ? c.border : "rgba(255,255,255,0.18)"}`, backdropFilter: "blur(20px)" }}
+      onClick={() => setOpen(o => !o)}
     >
-      <div className="flex items-center gap-4 px-5 py-6 cursor-pointer select-none" onClick={() => setOpen((o) => !o)}>
-        <div className="shrink-0 w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: c.iconBg, color: c.iconColor }}>
-          {metricIcon[metricKey]}
+      <div className="flex items-center gap-3 px-5 py-4">
+        <div className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: c.iconBg }}>
+          {metricKey === "GAS" && <Fire size={18} weight="duotone" style={{ color: c.iconColor }} />}
+          {metricKey === "TXS_PER_BLOCK" && <ArrowsLeftRight size={18} weight="duotone" style={{ color: c.iconColor }} />}
+          {metricKey === "ACTIVE_ADDRESSES" && <Users size={18} weight="duotone" style={{ color: c.iconColor }} />}
+          {metricKey === "NET_UTILIZATION" && <Gauge size={18} weight="duotone" style={{ color: c.iconColor }} />}
+          {metricKey === "DEX_VOLUME" && <CurrencyDollar size={18} weight="duotone" style={{ color: c.iconColor }} />}
+          {metricKey === "TVL_CHANGE" && <ChartLineUp size={18} weight="duotone" style={{ color: c.iconColor }} />}
+          {metricKey === "STABLECOIN_FLOWS" && <Coin size={18} weight="duotone" style={{ color: c.iconColor }} />}
+          {metricKey === "LIQUIDATIONS" && <Drop size={18} weight="duotone" style={{ color: c.iconColor }} />}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="text-white font-bold text-base tracking-tight truncate">{label}</div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.90)" }}>{label}</span>
             {tradeable && <TradeableBadge />}
           </div>
-          {((dailyHigh ?? 0) > 0 || metricKey === "NET_UTILIZATION") && (
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.10)" }}>
-                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${clampedPosition}%`, background: `linear-gradient(90deg, #818cf8, ${c.bar})` }} />
+          {(dailyHigh !== undefined || metricKey === "NET_UTILIZATION") && (
+            <div className="mt-1.5 flex items-center gap-2">
+              <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${barPct}%`, background: c.bar }} />
               </div>
-              <span className="text-[9px] tabular-nums shrink-0" style={{ color: "rgba(255,255,255,0.50)" }}>
+              <span className="text-[10px] tabular-nums shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>
                 {metricKey === "GAS"
                   ? `${(dailyLow ?? 0).toFixed(2)} / ${(dailyHigh ?? 0).toFixed(2)}`
                   : metricKey === "NET_UTILIZATION"
                   ? `0% / 100%`
-                  : metricKey === "DEX_VOLUME" || metricKey === "TVL_CHANGE" || metricKey === "STABLECOIN_FLOWS" || metricKey === "LIQUIDATIONS"
+                  : metricKey === "DEX_VOLUME" || metricKey === "STABLECOIN_FLOWS" || metricKey === "LIQUIDATIONS"
                   ? `${formatValue(metricKey, dailyLow ?? 0)} / ${formatValue(metricKey, dailyHigh ?? 0)}`
+                  : metricKey === "TVL_CHANGE"
+                  ? ""
                   : `${Math.round(dailyLow ?? 0).toLocaleString()} / ${Math.round(dailyHigh ?? 0).toLocaleString()}`}
               </span>
             </div>
@@ -856,10 +661,10 @@ function FeedRow({
         <MiniChart values={history} color={c.bar} />
         <StateTag state={state} />
         <div className="text-right shrink-0 ml-2">
-          <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight" style={{ color: value === 0 ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.95)" }}>
-            {formatValue(metricKey, value)}
+          <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight" style={{ color: safeValue === 0 && metricKey !== "TVL_CHANGE" ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.95)" }}>
+            {formatValue(metricKey, safeValue, { tvlValue })}
           </div>
-          {value > 0 && (
+          {(safeValue > 0 || metricKey === "TVL_CHANGE") && (
             <div className="text-[10px] uppercase tracking-widest mt-0.5" style={{ color: "rgba(255,255,255,0.50)" }}>{unit}</div>
           )}
         </div>
@@ -894,7 +699,7 @@ function FeedPage() {
   const addrState = getMetricState("ACTIVE_ADDRESSES", feed.ACTIVE_ADDRESSES ?? 0);
   const utilState = getUtilizationState(feed.NET_UTILIZATION ?? 0);
   const dexState = getSimpleMetricState(feed.DEX_VOLUME ?? 0, feed.DEX_VOLUME_LOW ?? 0, feed.DEX_VOLUME_HIGH ?? 1);
-  const tvlState = getSimpleMetricState(feed.TVL_CHANGE ?? 0, 0, Math.max((feed.TVL_CHANGE ?? 0) * 2, 1));
+  const tvlState = getSimpleMetricState(feed.TVL_CHANGE ?? 0, -5, 5);
   const stableState = getSimpleMetricState(feed.STABLECOIN_FLOWS ?? 0, feed.STABLECOIN_LOW ?? 0, feed.STABLECOIN_HIGH ?? 1);
   const liqState = getSimpleMetricState(feed.LIQUIDATIONS ?? 0, feed.LIQUIDATIONS_LOW ?? 0, feed.LIQUIDATIONS_HIGH ?? 1);
 
@@ -904,7 +709,7 @@ function FeedPage() {
     addr: feed.ACTIVE_ADDRESSES ?? 0, addrHigh: feed.ACTIVE_DAILY_HIGH ?? 0, addrLow: feed.ACTIVE_DAILY_LOW ?? 0,
     util: (feed.NET_UTILIZATION ?? 0) / 100,
     dex: feed.DEX_VOLUME ?? 0, dexHigh: feed.DEX_VOLUME_HIGH ?? 1, dexLow: feed.DEX_VOLUME_LOW ?? 0,
-    tvl: feed.TVL_CHANGE ?? 0, tvlHigh: Math.max((feed.TVL_CHANGE ?? 0) * 2, 1), tvlLow: 0,
+    tvl: feed.TVL_CHANGE ?? 0, tvlHigh: 5, tvlLow: -5,
     stable: feed.STABLECOIN_FLOWS ?? 0, stableHigh: feed.STABLECOIN_HIGH ?? 1, stableLow: feed.STABLECOIN_LOW ?? 0,
     liq: feed.LIQUIDATIONS ?? 0, liqHigh: feed.LIQUIDATIONS_HIGH ?? 1, liqLow: feed.LIQUIDATIONS_LOW ?? 0,
   });
@@ -933,7 +738,7 @@ function FeedPage() {
           gasValue={gas.current} txsValue={txs.current} addrValue={feed.ACTIVE_ADDRESSES ?? 0}
           utilState={utilState} utilValue={feed.NET_UTILIZATION ?? 0}
           dexState={dexState} dexValue={feed.DEX_VOLUME ?? 0}
-          tvlState={tvlState} tvlValue={feed.TVL_CHANGE ?? 0}
+          tvlState={tvlState} tvlValue={feed.TVL_VALUE ?? 0} tvlChangeValue={feed.TVL_CHANGE ?? 0}
           stableState={stableState} stableValue={feed.STABLECOIN_FLOWS ?? 0}
           liqState={liqState} liqValue={feed.LIQUIDATIONS ?? 0}
         />
@@ -967,7 +772,7 @@ function FeedPage() {
         <div className="flex flex-col gap-4">
           <FeedRow label="Network Utilization" unit="capacity" value={feed.NET_UTILIZATION ?? 0} metricKey="NET_UTILIZATION" />
           <FeedRow label="DEX Volume 24h" unit="usd" value={feed.DEX_VOLUME ?? 0} metricKey="DEX_VOLUME" dailyHigh={feed.DEX_VOLUME_HIGH} dailyLow={feed.DEX_VOLUME_LOW} />
-          <FeedRow label="DeFi TVL Change 24h" unit="usd" value={feed.TVL_CHANGE ?? 0} metricKey="TVL_CHANGE" dailyHigh={Math.max((feed.TVL_CHANGE ?? 0) * 2, 1)} dailyLow={0} />
+          <FeedRow label="DeFi TVL Change 24h" unit="tvl" value={feed.TVL_CHANGE ?? 0} metricKey="TVL_CHANGE" tvlValue={feed.TVL_VALUE ?? 0} />
           <FeedRow label="Stablecoin Flows" unit="usd" value={feed.STABLECOIN_FLOWS ?? 0} metricKey="STABLECOIN_FLOWS" dailyHigh={feed.STABLECOIN_HIGH} dailyLow={feed.STABLECOIN_LOW} />
           <FeedRow label="Liquidations" unit="usd" value={feed.LIQUIDATIONS ?? 0} metricKey="LIQUIDATIONS" dailyHigh={feed.LIQUIDATIONS_HIGH} dailyLow={feed.LIQUIDATIONS_LOW} />
         </div>
