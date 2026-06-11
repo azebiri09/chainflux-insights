@@ -134,6 +134,7 @@ export type FeedData = {
   ACTIVE_DAILY_HIGH: number;
   ACTIVE_DAILY_LOW: number;
   TVL_CHANGE: number;
+  TVL_VALUE: number;
   NET_UTILIZATION: number;
   DEX_VOLUME: number;
   DEX_VOLUME_HIGH: number;
