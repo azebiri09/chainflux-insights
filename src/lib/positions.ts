@@ -35,15 +35,15 @@ const notify = () => listeners.forEach((l) => l());
 let cachedOpen: Position[] = [];
 let cachedHist: Position[] = [];
 
-const HIST_KEY = "chainflux:positions:history";
+const getHistKey = (address: string) => `chainflux:positions:history:${address.toLowerCase()}`;
 const LEV_KEY = "chainflux:positions:leverage";
 
-function readHist(): Position[] {
+function readHist(address: string): Position[] {
   if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(getHistKey(address)) || "[]"); } catch { return []; }
 }
-function writeHist(v: Position[]) {
-  localStorage.setItem(HIST_KEY, JSON.stringify(v));
+function writeHist(address: string, v: Position[]) {
+  localStorage.setItem(getHistKey(address), JSON.stringify(v));
 }
 function readLevMap(): Record<string, number> {
   if (typeof window === "undefined") return {};
@@ -82,8 +82,6 @@ function decodeRevertReason(err: any): string {
   }
 }
 
-// Check if a position has been liquidated based on current price.
-// Liquidation threshold: 80% of margin lost.
 export function isLiquidated(p: Position, currentPrice: number): boolean {
   const moveToLiq = 0.8 / p.leverage;
   if (p.direction === "LONG") {
@@ -93,27 +91,25 @@ export function isLiquidated(p: Position, currentPrice: number): boolean {
   }
 }
 
-// Call this from the trade page on every price tick to auto-liquidate frontend state.
 export function checkLiquidations(prices: Record<Market, number>): void {
   const toLiquidate = cachedOpen.filter((p) => isLiquidated(p, prices[p.market] ?? 0));
   if (!toLiquidate.length) return;
 
-  const hist = readHist();
   toLiquidate.forEach((p) => {
     const liqPrice = p.direction === "LONG"
       ? p.entryPrice * (1 - 0.8 / p.leverage)
       : p.entryPrice * (1 + 0.8 / p.leverage);
+    const hist = readHist(p.id);
     hist.unshift({
       ...p,
       closePrice: liqPrice,
       closedAt: Date.now(),
       liquidated: true,
     });
+    writeHist(p.id, hist);
   });
-  writeHist(hist);
 
   cachedOpen = cachedOpen.filter((p) => !isLiquidated(p, prices[p.market] ?? 0));
-  cachedHist = hist;
   notify();
 }
 
@@ -166,6 +162,7 @@ export async function closePosition(
   if (!window.ethereum) throw new Error("No wallet");
   const provider = new ethers.BrowserProvider(window.ethereum);
   const signer = await provider.getSigner();
+  const address = await signer.getAddress();
   const contract = new ethers.Contract(PROXY_ADDRESS, ABI, signer);
 
   const tx = await contract.closePosition(BigInt(positionId), { gasLimit: 400000 });
@@ -173,16 +170,16 @@ export async function closePosition(
 
   const closed = cachedOpen.find((p) => p.id === positionId);
   if (closed) {
-    const hist = readHist();
+    const hist = readHist(address);
     hist.unshift({ ...closed, closePrice: currentPrice, closedAt: Date.now() });
-    writeHist(hist);
+    writeHist(address, hist);
   }
 
   const levMap = readLevMap();
   delete levMap[positionId];
   writeLevMap(levMap);
 
-  await refreshPositions(await signer.getAddress());
+  await refreshPositions(address);
 }
 
 export async function refreshPositions(address: string): Promise<void> {
@@ -241,7 +238,7 @@ export async function refreshPositions(address: string): Promise<void> {
     }
 
     cachedOpen = positions;
-    cachedHist = readHist();
+    cachedHist = readHist(address);
     notify();
   } catch (err) {
     console.error("Position fetch error:", err);
@@ -271,4 +268,4 @@ export function pnl(p: Position, currentPrice: number): number {
     ? currentPrice - p.entryPrice
     : p.entryPrice - currentPrice;
   return (diff / p.entryPrice) * p.collateral * p.leverage;
-  }
+}
