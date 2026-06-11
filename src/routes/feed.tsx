@@ -506,49 +506,53 @@ function AttentionScoreCard({
   const circumference = 2 * Math.PI * 44;
   const offset = circumference - (score / 100) * circumference;
 
+  // Refined professional palette — muted, no neon, no glow.
+  const REFINED: Record<"low" | "medium" | "high", { stroke: string; chipBg: string; chipBorder: string; chipText: string; label: string }> = {
+    low:    { stroke: "rgba(148,163,184,0.85)", chipBg: "rgba(148,163,184,0.08)", chipBorder: "rgba(148,163,184,0.28)", chipText: "rgba(203,213,225,0.95)", label: "Cooling" },
+    medium: { stroke: "rgba(180,168,140,0.85)", chipBg: "rgba(180,168,140,0.08)", chipBorder: "rgba(180,168,140,0.28)", chipText: "rgba(215,205,180,0.95)", label: "Stable" },
+    high:   { stroke: "rgba(143,176,158,0.90)", chipBg: "rgba(143,176,158,0.08)", chipBorder: "rgba(143,176,158,0.30)", chipText: "rgba(196,219,206,0.95)", label: "Surging" },
+  };
+  const weights = [20, 20, 10, 15, 10, 10, 5, 10];
+  const donutR = 80;
+  const donutC = 2 * Math.PI * donutR;
+  let acc = 0;
+
   return (
     <div
-      className="rounded-2xl p-6 sm:p-8 mb-2 cursor-pointer select-none"
-      style={{ background: "rgba(255,255,255,0.03)", border: "2px solid rgba(255,255,255,0.18)", backdropFilter: "blur(20px)" }}
+      className="rounded-2xl p-6 sm:p-8 mb-2 cursor-pointer select-none transition-colors"
+      style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.10)" }}
       onClick={() => setOpen(o => !o)}
     >
       <div className="text-[9px] tracking-[0.25em] uppercase font-semibold mb-4" style={{ color: "rgba(255,255,255,0.45)" }}>Ethereum Attention State</div>
       <div className="flex items-start gap-6 sm:gap-10">
         <div className="relative shrink-0">
           <svg width="100" height="100" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="7" />
+            <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
             <circle
               cx="50" cy="50" r="44" fill="none"
-              stroke={info.color}
-              strokeWidth="7"
+              stroke="rgba(255,255,255,0.85)"
+              strokeWidth="6"
               strokeDasharray={circumference}
               strokeDashoffset={offset}
               strokeLinecap="round"
               transform="rotate(-90 50 50)"
-              style={{ transition: "stroke-dashoffset 1s ease, stroke 0.5s ease", filter: `drop-shadow(0 0 6px ${info.color}60)` }}
+              style={{ transition: "stroke-dashoffset 1s ease" }}
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-2xl font-bold tabular-nums" style={{ color: info.color }}>{score}</div>
+            <div className="text-2xl font-semibold tabular-nums" style={{ color: "rgba(255,255,255,0.95)" }}>{score}</div>
             <div className="text-[9px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.35)" }}>score</div>
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: info.color }} />
-            <div className="text-xl sm:text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>{info.label}</div>
-          </div>
+          <div className="text-xl sm:text-2xl font-semibold mb-1" style={{ color: "rgba(255,255,255,0.95)" }}>{info.label}</div>
           <p className="text-sm mb-3" style={{ color: "rgba(255,255,255,0.60)" }}>{info.interpretation}</p>
           <div
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold tracking-wide"
-            style={{ background: phase.ring, border: `1px solid ${phase.color}40`, color: phase.color }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-medium tracking-wide uppercase"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.75)" }}
           >
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: phase.color }} />
             {phase.label}
           </div>
-          {open && (
-            <p className="mt-3 text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>{phase.interpretation}</p>
-          )}
         </div>
         <div
           className="shrink-0 transition-transform duration-300 mt-1"
@@ -561,29 +565,87 @@ function AttentionScoreCard({
       </div>
 
       {open && (
-        <div className="mt-6 pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <div className="text-[9px] tracking-[0.25em] uppercase font-semibold mb-4" style={{ color: "rgba(255,255,255,0.35)" }}>Signal Breakdown</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {SIGNALS.map((sig) => {
-              const c = STATE_COLORS[sig.state];
-              return (
-                <div key={sig.label} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c.bar }} />
-                    <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.65)" }}>{sig.label}</span>
-                    <span className="text-[9px] shrink-0" style={{ color: "rgba(255,255,255,0.25)" }}>{sig.weight}</span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.80)" }}>{sig.format(sig.value)}</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}` }}>
-                      {sig.state === "low" ? "Cooling" : sig.state === "medium" ? "Stable" : "Surging"}
-                    </span>
-                  </div>
+        <div className="mt-8 pt-8" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          {/* Large centered segmented donut */}
+          <div className="flex flex-col items-center">
+            <div className="relative" style={{ width: 220, height: 220 }}>
+              <svg width="220" height="220" viewBox="0 0 220 220">
+                <circle cx="110" cy="110" r={donutR} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="14" />
+                {SIGNALS.map((sig, i) => {
+                  const w = weights[i];
+                  const segLen = (w / 100) * donutC;
+                  const gap = 2;
+                  const dash = `${Math.max(0, segLen - gap)} ${donutC}`;
+                  const rot = -90 + (acc / 100) * 360;
+                  acc += w;
+                  return (
+                    <circle
+                      key={sig.label}
+                      cx="110" cy="110" r={donutR}
+                      fill="none"
+                      stroke={REFINED[sig.state].stroke}
+                      strokeWidth="14"
+                      strokeDasharray={dash}
+                      transform={`rotate(${rot} 110 110)`}
+                    />
+                  );
+                })}
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <div className="text-4xl font-semibold tabular-nums" style={{ color: "rgba(255,255,255,0.95)" }}>{score}</div>
+                <div className="text-[9px] uppercase tracking-[0.25em] mt-1" style={{ color: "rgba(255,255,255,0.40)" }}>Attention</div>
+              </div>
+            </div>
+
+            {/* Legend row */}
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+              {(["low","medium","high"] as const).map((s) => (
+                <div key={s} className="flex items-center gap-2">
+                  <span className="inline-block w-3 h-[3px] rounded-full" style={{ background: REFINED[s].stroke }} />
+                  <span className="text-[10px] uppercase tracking-[0.2em] font-medium" style={{ color: "rgba(255,255,255,0.55)" }}>{REFINED[s].label}</span>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
-          <p className="mt-4 text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.40)" }}>{info.description}</p>
+
+          {/* Signal rows */}
+          <div className="mt-8">
+            <div className="text-[9px] tracking-[0.25em] uppercase font-semibold mb-3" style={{ color: "rgba(255,255,255,0.40)" }}>Signal Breakdown</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {SIGNALS.map((sig) => {
+                const r = REFINED[sig.state];
+                return (
+                  <div
+                    key={sig.label}
+                    className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl"
+                    style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="inline-block w-[3px] h-5 rounded-full shrink-0" style={{ background: r.stroke }} />
+                      <span className="text-xs font-medium truncate" style={{ color: "rgba(255,255,255,0.85)" }}>{sig.label}</span>
+                      <span className="text-[9px] shrink-0 tabular-nums" style={{ color: "rgba(255,255,255,0.35)" }}>{sig.weight}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.85)" }}>{sig.format(sig.value)}</span>
+                      <span
+                        className="text-[9px] tracking-[0.15em] uppercase font-semibold px-2 py-0.5 rounded-full"
+                        style={{ background: r.chipBg, color: r.chipText, border: `1px solid ${r.chipBorder}` }}
+                      >
+                        {r.label}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Network summary */}
+          <div className="mt-6 p-5 rounded-xl" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <div className="text-[9px] tracking-[0.25em] uppercase font-semibold mb-2" style={{ color: "rgba(255,255,255,0.40)" }}>Network Summary</div>
+            <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.70)" }}>{phase.interpretation}</p>
+            <p className="mt-3 text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.45)" }}>{info.description}</p>
+          </div>
         </div>
       )}
     </div>
