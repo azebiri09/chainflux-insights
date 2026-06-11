@@ -452,23 +452,6 @@ function TradeableBadge() {
   );
 }
 
-function generateSparkline(current: number, low: number, high: number, points = 12): number[] {
-  if (current === 0 && low === 0 && high === 0) return [];
-  const lo = low > 0 ? low : current * 0.85;
-  const hi = high > lo ? high : current * 1.15;
-  const seed = Math.floor(current * 1000) % 997;
-  const rand = (i: number) => {
-    const x = Math.sin(seed + i * 7.3) * 43758.5453;
-    return x - Math.floor(x);
-  };
-  const vals: number[] = [];
-  for (let i = 0; i < points - 1; i++) {
-    vals.push(lo + rand(i) * (hi - lo));
-  }
-  vals.push(current);
-  return vals;
-}
-
 function MiniChart({ values, color }: { values: number[]; color: string }) {
   if (!values || values.length < 2) return <div className="w-16 h-8" />;
   const min = Math.min(...values);
@@ -507,7 +490,7 @@ function ExplainCell({ label, text, icon, highlight }: { label: string; text: st
 
 function EthLogo() {
   return (
-    <div className="absolute top-0 right-0 pointer-events-none select-none" style={{ opacity: 0.18 }}>
+    <div className="absolute top-0 right-0 pointer-events-none select-none" style={{ opacity: 0.06 }}>
       <svg width="180" height="180" viewBox="0 0 256 417" fill="white">
         <path d="M127.9 0L125 9.5V285l2.9 2.9 127.9-75.6z" />
         <path d="M127.9 0L0 212.3l127.9 75.6V0z" opacity=".6" />
@@ -711,7 +694,7 @@ function FeedRow({
 }) {
   const [open, setOpen] = useState(false);
   const feedData = useNetworkFeed();
-  const rawHistory: number[] = (feedData as any)[`${metricKey}_HISTORY`] ?? [];
+  const history: number[] = (feedData as any)[`${metricKey}_HISTORY`] ?? [];
   const ago = useUpdatedAgo(updatedAt ?? 0);
 
   const safeValue = value ?? 0;
@@ -725,10 +708,6 @@ function FeedRow({
 
   const c = STATE_COLORS[state];
   const explanation = EXPLANATIONS[metricKey]?.[state];
-
-  const history = rawHistory.length >= 2
-    ? rawHistory
-    : generateSparkline(safeValue, dailyLow ?? 0, dailyHigh ?? 0);
 
   const tvlBarPct = metricKey === "TVL_CHANGE"
     ? Math.min(100, Math.max(0, ((safeValue + 5) / 10) * 100))
