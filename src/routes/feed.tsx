@@ -723,11 +723,29 @@ function FeedRow({
         <MiniChart values={history} color={c.bar} />
         <StateTag state={state} />
         <div className="text-right shrink-0 ml-2">
-          <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight" style={{ color: safeValue === 0 && metricKey !== "TVL_CHANGE" ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.95)" }}>
-            {formatValue(metricKey, safeValue, { tvlValue })}
-          </div>
-          {(safeValue > 0 || metricKey === "TVL_CHANGE") && (
-            <div className="text-[10px] uppercase tracking-widest mt-0.5" style={{ color: "rgba(255,255,255,0.50)" }}>{unit}</div>
+          {metricKey === "TVL_CHANGE" ? (
+            (tvlValue ?? 0) === 0 && safeValue === 0 ? (
+              <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight" style={{ color: "rgba(255,255,255,0.25)" }}>Loading</div>
+            ) : (
+              <>
+                <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight leading-none" style={{ color: "rgba(255,255,255,0.95)" }}>
+                  {(tvlValue ?? 0) >= 1e9 ? `$${((tvlValue ?? 0) / 1e9).toFixed(2)}B` : (tvlValue ?? 0) >= 1e6 ? `$${((tvlValue ?? 0) / 1e6).toFixed(1)}M` : `$${(tvlValue ?? 0).toFixed(0)}`}
+                </div>
+                <div className="text-sm font-semibold tabular-nums mt-1" style={{ color: safeValue >= 0 ? "rgba(143,176,158,0.95)" : "rgba(212,160,160,0.95)" }}>
+                  {`${safeValue >= 0 ? "+" : ""}${safeValue.toFixed(2)}%`}
+                </div>
+                <div className="text-[10px] uppercase tracking-widest mt-0.5" style={{ color: "rgba(255,255,255,0.50)" }}>{unit}</div>
+              </>
+            )
+          ) : (
+            <>
+              <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight" style={{ color: safeValue === 0 ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.95)" }}>
+                {formatValue(metricKey, safeValue, { tvlValue })}
+              </div>
+              {safeValue > 0 && (
+                <div className="text-[10px] uppercase tracking-widest mt-0.5" style={{ color: "rgba(255,255,255,0.50)" }}>{unit}</div>
+              )}
+            </>
           )}
         </div>
         <div
