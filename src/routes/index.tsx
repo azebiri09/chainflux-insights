@@ -4,7 +4,7 @@ import Layout from "@/components/Layout";
 import Sparkline from "@/components/Sparkline";
 import { useAllMarkets } from "@/lib/markets";
 import { ethers } from "ethers";
-import heroBg from "@/assets/hero-bg.jpg";
+import cfLogo from "@/assets/cf-logo.png";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -99,7 +99,7 @@ function Index() {
         />
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,1) 100%)" }} />
         <div className="relative w-full px-5 sm:px-10 pt-32 pb-24 text-center rise">
-          <h1 className="headline hero-text mt-8 text-5xl sm:text-7xl md:text-[5.5rem] font-semibold tracking-tight leading-[1.08]">
+          <img src={cfLogo} alt="ChainFlux" className="mx-auto h-20 w-20 rounded-2xl object-cover mb-6" />
             Markets Powered By
             <br />
             <span className="hero-span">Blockchain Activities.</span>
