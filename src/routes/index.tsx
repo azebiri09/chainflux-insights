@@ -5,6 +5,7 @@ import Sparkline from "@/components/Sparkline";
 import { useAllMarkets } from "@/lib/markets";
 import { ethers } from "ethers";
 import cfLogo from "@/assets/cf-logo.png";
+import heroBg from "@/assets/hero-bg.jpg";
 
 export const Route = createFileRoute("/")({
   component: Index,
