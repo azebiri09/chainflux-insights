@@ -1,5 +1,6 @@
 import cfLogo from "@/assets/cf-logo.png";
 import { useEffect, useState } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { useWallet, connectWallet, disconnectWallet, shortAddr } from "@/lib/wallet";
 
 const links = [
