@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import cfLogo from "@/assets/cf-logo.png";
 import { useEffect, useState } from "react";
 import { useWallet, connectWallet, disconnectWallet, shortAddr } from "@/lib/wallet";
 
@@ -32,9 +32,9 @@ export default function Navbar({ transparentOnTop = false }: { transparentOnTop?
     >
       <div className="mx-auto max-w-7xl px-6 sm:px-10 h-20 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
-          <span className="h-8 w-8 rounded-lg bg-white/10 border border-white/20" />
-          <span className="text-lg font-bold tracking-tight text-white">ChainFlux</span>
-        </Link>
+  <img src={cfLogo} alt="ChainFlux" className="h-9 w-9 rounded-lg object-cover" />
+  <span className="text-lg font-bold tracking-tight text-white">ChainFlux</span>
+</Link>
 
         <nav className="hidden md:flex items-center gap-2">
           {links.map((l) => {
