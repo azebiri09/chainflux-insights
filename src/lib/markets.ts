@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 export type Market = "GAS" | "TXS_PER_BLOCK";
 
-const KEEPER_API = "https://chainflux-production.up.railway.app";
+const KEEPER_API = "https://chainflux.onrender.com";
 
 export const MARKET_LABELS: Record<Market, string> = {
   GAS: "Gas Price",
